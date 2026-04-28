@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TSi – Job Time Tracker</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+<!-- ── PIN Modal ─────────────────────────────────────────────────────────── -->
+<div id="pin-overlay" class="overlay active">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="logo-mark">TSi</div>
+      <h2>Job Time Tracker</h2>
+      <p class="subtitle">Select your name and enter your PIN to continue</p>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label for="login-employee">Employee</label>
+        <select id="login-employee">
+          <option value="">— Select employee —</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="login-pin">PIN</label>
+        <div class="pin-row">
+          <input id="login-pin" type="password" inputmode="numeric"
+                 maxlength="8" placeholder="Enter PIN" autocomplete="off" />
+          <button class="btn-icon" id="pin-toggle" title="Show/hide PIN">👁</button>
+        </div>
+      </div>
+      <div id="login-error" class="error-msg hidden">Incorrect PIN. Please try again.</div>
+      <button class="btn btn-primary full-width" id="login-btn">Sign In</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Edit Entry Modal ───────────────────────────────────────────────────── -->
+<div id="edit-overlay" class="overlay">
+  <div class="modal modal-wide">
+    <div class="modal-header">
+      <h2>Edit Entry</h2>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-entry-id" />
+      <div class="form-grid">
+        <div class="field">
+          <label>Date</label>
+          <input type="date" id="edit-date" />
+        </div>
+        <div class="field">
+          <label>Job / Invoice #</label>
+          <div class="combo-wrap">
+            <input type="text" id="edit-job-input" placeholder="Search or type job number…" autocomplete="off" />
+            <ul class="combo-list hidden" id="edit-job-list"></ul>
+          </div>
+        </div>
+        <div class="field">
+          <label>Task</label>
+          <div class="combo-wrap">
+            <input type="text" id="edit-task-input" placeholder="Search task…" autocomplete="off" />
+            <ul class="combo-list hidden" id="edit-task-list"></ul>
+          </div>
+        </div>
+        <div class="field">
+          <label>Category</label>
+          <input type="text" id="edit-category" readonly placeholder="Auto-filled from task" />
+        </div>
+        <div class="field">
+          <label>Hours</label>
+          <div class="hours-wrap">
+            <input type="number" id="edit-hours" min="0.25" max="24" step="0.25" placeholder="0.00" />
+            <div class="quick-hours" id="edit-quick-hours"></div>
+          </div>
+        </div>
+        <div class="field full-span">
+          <label>Description <span class="hint">(optional)</span></label>
+          <input type="text" id="edit-description" placeholder="Brief description of work done…" />
+        </div>
+        <div class="field full-span" id="edit-notes-wrap">
+          <label>Notes <span class="hint">(required when task is Not Listed)</span></label>
+          <textarea id="edit-notes" rows="2" placeholder="Describe the task if not listed above…"></textarea>
+        </div>
+      </div>
+      <div id="edit-error" class="error-msg hidden"></div>
+      <div class="modal-actions">
+        <button class="btn btn-danger" id="edit-delete-btn">Delete Entry</button>
+        <div class="spacer"></div>
+        <button class="btn btn-secondary" id="edit-cancel-btn">Cancel</button>
+        <button class="btn btn-primary" id="edit-save-btn">Save Changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Admin Modal ────────────────────────────────────────────────────────── -->
+<div id="admin-overlay" class="overlay">
+  <div class="modal modal-wide">
+    <div class="modal-header">
+      <h2>Admin Panel</h2>
+      <button class="btn-close" id="admin-close-btn">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="tab-bar">
+        <button class="tab active" data-tab="jobs">Jobs / Invoices</button>
+        <button class="tab" data-tab="tasks">Tasks</button>
+        <button class="tab" data-tab="employees">Employees</button>
+        <button class="tab" data-tab="export">Export Data</button>
+      </div>
+
+      <!-- Jobs tab -->
+      <div class="tab-content active" id="tab-jobs">
+        <div class="add-form">
+          <input type="text" id="new-job-number" placeholder="Job / Invoice number" />
+          <input type="text" id="new-job-desc" placeholder="Description (optional)" />
+          <button class="btn btn-primary" id="add-job-btn">Add Job</button>
+        </div>
+        <div class="admin-list" id="jobs-list"></div>
+      </div>
+
+      <!-- Tasks tab -->
+      <div class="tab-content" id="tab-tasks">
+        <div class="add-form">
+          <input type="text" id="new-task-name" placeholder="Task name" />
+          <input type="text" id="new-task-category" placeholder="Category" />
+          <button class="btn btn-primary" id="add-task-btn">Add Task</button>
+        </div>
+        <div class="admin-list" id="tasks-list"></div>
+      </div>
+
+      <!-- Employees tab -->
+      <div class="tab-content" id="tab-employees">
+        <div class="add-form">
+          <input type="text" id="new-emp-name" placeholder="Full name" />
+          <input type="text" id="new-emp-pin" placeholder="PIN (digits)" inputmode="numeric" />
+          <label class="checkbox-label">
+            <input type="checkbox" id="new-emp-admin" /> Admin
+          </label>
+          <button class="btn btn-primary" id="add-emp-btn">Add Employee</button>
+        </div>
+        <div class="admin-list" id="employees-list"></div>
+      </div>
+
+      <!-- Export tab -->
+      <div class="tab-content" id="tab-export">
+        <div class="export-form">
+          <div class="field">
+            <label>Date From</label>
+            <input type="date" id="export-from" />
+          </div>
+          <div class="field">
+            <label>Date To</label>
+            <input type="date" id="export-to" />
+          </div>
+          <button class="btn btn-primary" id="export-btn">Download Excel</button>
+        </div>
+        <p class="hint-block">Exports all employee entries for the selected date range. Leave blank to export everything.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Main App ───────────────────────────────────────────────────────────── -->
+<div id="app" class="hidden">
+
+  <header class="app-header">
+    <div class="header-brand">
+      <span class="brand-logo">TSi</span>
+      <span class="brand-title">Job Time Tracker</span>
+    </div>
+    <div class="header-user">
+      <span id="header-name">—</span>
+      <button class="btn btn-sm btn-secondary" id="admin-btn" style="display:none">Admin</button>
+      <button class="btn btn-sm btn-outline" id="switch-user-btn">Switch User</button>
+    </div>
+  </header>
+
+  <main class="main-content">
+
+    <!-- Entry Form -->
+    <section class="card entry-card">
+      <h3 class="card-title">Log Time Entry</h3>
+      <div class="form-grid">
+
+        <div class="field">
+          <label for="entry-date">Date</label>
+          <input type="date" id="entry-date" />
+        </div>
+
+        <div class="field">
+          <label for="job-input">Job / Invoice # <span class="required">*</span></label>
+          <div class="combo-wrap">
+            <input type="text" id="job-input" placeholder="Search or type job number…"
+                   autocomplete="off" />
+            <ul class="combo-list hidden" id="job-list"></ul>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="task-input">Task <span class="required">*</span></label>
+          <div class="combo-wrap">
+            <input type="text" id="task-input" placeholder="Search task…"
+                   autocomplete="off" />
+            <ul class="combo-list hidden" id="task-list"></ul>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="category">Category</label>
+          <input type="text" id="category" readonly
+                 placeholder="Auto-filled from task selection" />
+        </div>
+
+        <div class="field">
+          <label for="hours">Hours <span class="required">*</span></label>
+          <div class="hours-wrap">
+            <input type="number" id="hours" min="0.25" max="24" step="0.25"
+                   placeholder="0.00" />
+            <div class="quick-hours" id="quick-hours"></div>
+          </div>
+        </div>
+
+        <div class="field full-span">
+          <label for="description">Description <span class="hint">(optional)</span></label>
+          <input type="text" id="description"
+                 placeholder="Brief description of work done…" />
+        </div>
+
+        <div class="field full-span" id="notes-wrap">
+          <label for="notes">Notes <span class="hint">(required when task is Not Listed)</span></label>
+          <textarea id="notes" rows="2"
+                    placeholder="Describe the task if not listed above…"></textarea>
+        </div>
+
+      </div>
+
+      <div id="entry-error" class="error-msg hidden"></div>
+      <div id="entry-success" class="success-msg hidden"></div>
+
+      <div class="form-actions">
+        <button class="btn btn-secondary" id="clear-btn">Clear</button>
+        <button class="btn btn-primary" id="submit-btn">Submit Entry</button>
+      </div>
+    </section>
+
+    <!-- Recent Entries -->
+    <section class="card entries-card">
+      <div class="entries-header">
+        <h3 class="card-title">Recent Entries</h3>
+        <div class="entries-controls">
+          <input type="date" id="filter-date" title="Filter by date" />
+          <button class="btn btn-sm btn-outline" id="refresh-btn">Refresh</button>
+        </div>
+      </div>
+      <div id="entries-table-wrap">
+        <table class="entries-table" id="entries-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Job #</th>
+              <th>Task</th>
+              <th>Category</th>
+              <th>Hrs</th>
+              <th>Description</th>
+              <th>Notes</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="entries-body">
+            <tr><td colspan="8" class="empty-row">No entries yet.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="entries-footer">
+        <span id="entries-total"></span>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
