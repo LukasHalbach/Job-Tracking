@@ -510,7 +510,7 @@ def export_excel():
     ws = wb.active
     ws.title = "Time Entries"
 
-    header_fill = PatternFill("solid", fgColor="1F4E79")
+    header_fill = PatternFill("solid", fgColor="1E5C1E")
     header_font = Font(bold=True, color="FFFFFF", size=11)
     center = Alignment(horizontal="center", vertical="center")
     wrap = Alignment(wrap_text=True, vertical="top")
