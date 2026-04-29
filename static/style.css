@@ -2,9 +2,9 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --blue:       #1a56db;
-  --blue-dark:  #1e429f;
-  --blue-light: #ebf5ff;
+  --blue:       #2a7a2a;
+  --blue-dark:  #1e5c1e;
+  --blue-light: #eaf6ea;
   --red:        #c81e1e;
   --red-light:  #fde8e8;
   --green:      #057a55;
@@ -72,7 +72,7 @@ body {
 }
 
 .modal-header {
-  background: linear-gradient(135deg, #1a56db 0%, #1e429f 100%);
+  background: linear-gradient(135deg, #2a7a2a 0%, #1e5c1e 100%);
   color: #fff;
   padding: 1.5rem 1.75rem 1.25rem;
   text-align: center;
@@ -90,6 +90,23 @@ body {
   font-size: 1.3rem;
   font-weight: 900;
   letter-spacing: .05em;
+}
+
+.modal-logo {
+  height: 64px;
+  width: auto;
+  object-fit: contain;
+  display: block;
+  margin: 0 auto .25rem;
+  filter: brightness(0) invert(1);
+}
+
+.header-logo {
+  height: 36px;
+  width: auto;
+  object-fit: contain;
+  display: block;
+  filter: brightness(0) invert(1);
 }
 
 .btn-close {
@@ -211,7 +228,7 @@ body {
 .field textarea:focus {
   outline: none;
   border-color: var(--blue);
-  box-shadow: 0 0 0 3px rgba(26,86,219,.15);
+  box-shadow: 0 0 0 3px rgba(42,122,42,.15);
 }
 .field input[readonly] {
   background: var(--gray-50);
@@ -311,7 +328,7 @@ body {
 
 /* ── App Header ───────────────────────────────────────────────────────────── */
 .app-header {
-  background: linear-gradient(135deg, #1a56db 0%, #1e429f 100%);
+  background: linear-gradient(135deg, #2a7a2a 0%, #1e5c1e 100%);
   color: #fff;
   padding: .75rem 1.5rem;
   display: flex;
