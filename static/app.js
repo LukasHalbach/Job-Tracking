@@ -499,6 +499,41 @@ async function loadAdminJobs() {
   });
 }
 
+$('csv-file-input').addEventListener('change', () => {
+  const file = $('csv-file-input').files[0];
+  $('csv-file-name').textContent = file ? file.name : 'Choose CSV file…';
+  $('import-csv-btn').disabled = !file;
+  $('csv-result').className = 'hidden';
+  $('csv-result').textContent = '';
+});
+
+$('import-csv-btn').addEventListener('click', async () => {
+  const file = $('csv-file-input').files[0];
+  if (!file) return;
+  const result = $('csv-result');
+  result.className = 'hidden';
+
+  const form = new FormData();
+  form.append('file', file);
+  form.append('employee_id', state.employeeId);
+  form.append('pin', state.pin);
+
+  try {
+    const res = await fetch('/api/jobs/import', { method: 'POST', body: form });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    result.textContent = `Done — ${data.added} job${data.added !== 1 ? 's' : ''} added, ${data.skipped} skipped (already exist or blank).`;
+    result.className = 'ok';
+    $('csv-file-input').value = '';
+    $('csv-file-name').textContent = 'Choose CSV file…';
+    $('import-csv-btn').disabled = true;
+    await Promise.all([loadAdminJobs(), loadJobs()]);
+  } catch (e) {
+    result.textContent = e.message;
+    result.className = 'err';
+  }
+});
+
 $('add-job-btn').addEventListener('click', async () => {
   const num  = $('new-job-number').value.trim();
   const desc = $('new-job-desc').value.trim();
