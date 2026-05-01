@@ -14,55 +14,51 @@ app = Flask(__name__)
 DB_PATH = os.path.join(os.path.dirname(__file__), "data", "timelog.db")
 
 TASKS = [
-    ("Admin", "Admin"),
-    ("Cleaning", "Cleaning up shop"),
-    ("Client Artwork Review", "Pre-Production"),
-    ("Client Communication", "Admin"),
-    ("CNC Route – Sign Letters", "Laser / CNC"),
-    ("Color Matching & Test Prints", "Pre-Production"),
-    ("Courier / Delivery Coordination", "Shop Operations"),
-    ("Department Head Coordination", "Admin"),
-    ("Equipment Fault Investigation", "Equipment Maintenance"),
-    ("File Prep & Art Setup", "Pre-Production"),
-    ("Flat Bed Printing 200", "Printing"),
-    ("Foam Cutting", "Foam Cutting"),
-    ("Material / Substrate Receiving", "Shop Operations"),
-    ("Morning Prep", "Shop Operations"),
-    ("Prepress", "Pre-Production"),
-    ("Proof Creation & Output", "Pre-Production"),
-    ("Quote / Estimate Prep", "Admin"),
-    ("Restock Material", "Restock"),
-    ("Roll to Roll 300", "Large Format Print"),
-    ("Shipping", "Inbound/Outbound"),
-    ("Stock Take & Inventory Restock", "Shop Operations"),
-    ("Summa Cutting", "Summa Plotting"),
-    ("Supplier / Vendor Communication", "Admin"),
-    ("Supply Run", "Out to buy supplies"),
-    ("Table Work", "Finishing Work"),
-    ("Team Meeting", "Admin"),
-    ("Vehicle / Van Loading", "Shop Operations"),
-    ("Vinyl Application – Flat Substrate", "Vinyl Application"),
-    ("Wide Format Print – Banner / Vinyl", "Large Format Print"),
-    ("Loading Machine", "Loading 55"),
-    ("Reloading Machines", "Roll to Roll"),
-    ("Trash", "Taking out Trash"),
-    ("Laminate", "Laminating"),
-    ("Helping With", "Heat Press"),
-    ("Fabric Finishing", "Helping with Fabric"),
-    ("On Site Install", "Installation"),
-    ("Vehicle Maintenance / Repairs", "Shop Operations"),
-    ("Plotting", "Contour Cuts"),
-    ("Machine Maintenance", "Shop Operations"),
-    ("Ordering Material", "Admin"),
-    ("Hats", "Embroidery"),
-    ("T-Shirts", "Embroidery"),
-    ("Caddie Bibs", "Sewing"),
-    ("Caddie Backs", "Sewing"),
-    ("Direct to Fabric", "DGI Printing"),
-    ("Transfer to Fabric", "Mimaki Dye Sub Printing"),
-    ("Heat Press Fabric", "Heat Pressing"),
-    ("Direct to Film", "DTF Printing"),
-    ("Not Listed", "Other"),
+    ("Roll Printing",               "Printing"),
+    ("Sheet Printing",              "Printing"),
+    ("Direct to Fabric Printing",   "Printing"),
+    ("On-Site Printing",            "Printing"),
+    ("Roll Cutting",                "Cutting"),
+    ("Sheet Cutting",               "Cutting"),
+    ("Contour Cutting",             "Cutting"),
+    ("Foam Cutting",                "Cutting"),
+    ("Laminating",                  "Finishing"),
+    ("Heat Press",                  "Finishing"),
+    ("Vinyl Application",           "Finishing"),
+    ("Table Work",                  "Finishing"),
+    ("Fabric Finishing",            "Finishing"),
+    ("Edge Welding",                "Finishing"),
+    ("CNC Routing",                 "Fabrication"),
+    ("Laser Engraving",             "Fabrication"),
+    ("3D Printing",                 "Fabrication"),
+    ("Metal Fabrication",           "Fabrication"),
+    ("Wood Fabrication",            "Fabrication"),
+    ("Embroidery",                  "Embroidery & Sewing"),
+    ("Sewing",                      "Embroidery & Sewing"),
+    ("On-Site Installation",        "Installation"),
+    ("Vehicle Loading",             "Installation"),
+    ("File Prep & Art Setup",       "Pre-Production"),
+    ("Prepress",                    "Pre-Production"),
+    ("Color Matching & Test Prints","Pre-Production"),
+    ("Proof Creation & Output",     "Pre-Production"),
+    ("Client Artwork Review",       "Pre-Production"),
+    ("Morning Prep",                "Shop Operations"),
+    ("Inventory Management",        "Shop Operations"),
+    ("Ordering Material",           "Shop Operations"),
+    ("Shipping",                    "Shop Operations"),
+    ("Cleaning",                    "Shop Operations"),
+    ("Machine Maintenance",         "Equipment Maintenance"),
+    ("Vehicle Maintenance",         "Equipment Maintenance"),
+    ("Loading Machines",            "Equipment Maintenance"),
+    ("Admin",                       "Admin"),
+    ("Client Communication",        "Admin"),
+    ("Estimate Prep",               "Admin"),
+    ("Vendor Communication",        "Admin"),
+    ("Department Head Coordination","Admin"),
+    ("Team Meeting",                "Admin"),
+    ("Training",                    "Admin"),
+    ("Assisting",                   "Admin"),
+    ("Not Listed",                  "Other"),
 ]
 
 
@@ -122,12 +118,20 @@ def init_db():
             );
         """)
 
-        # Seed tasks if empty
-        count = conn.execute("SELECT COUNT(*) FROM tasks").fetchone()[0]
-        if count == 0:
-            conn.executemany(
-                "INSERT INTO tasks (name, category) VALUES (?, ?)", TASKS
-            )
+        # Sync tasks — add new, reactivate returning, deactivate removed
+        canonical = {name: category for name, category in TASKS}
+        existing  = {row["name"]: row for row in
+                     conn.execute("SELECT name, category, active FROM tasks").fetchall()}
+        for name, category in TASKS:
+            if name not in existing:
+                conn.execute("INSERT INTO tasks (name, category) VALUES (?, ?)",
+                             (name, category))
+            else:
+                conn.execute("UPDATE tasks SET category=?, active=1 WHERE name=?",
+                             (category, name))
+        for name in existing:
+            if name not in canonical:
+                conn.execute("UPDATE tasks SET active=0 WHERE name=?", (name,))
 
         # Seed a default admin if no employees exist
         count = conn.execute("SELECT COUNT(*) FROM employees").fetchone()[0]
