@@ -466,6 +466,50 @@ body {
 }
 .edit-btn:hover { background: var(--blue-light); }
 
+/* ── CSV Upload ───────────────────────────────────────────────────────────── */
+.csv-upload-section {
+  background: var(--gray-50);
+  border: 1.5px dashed var(--gray-300);
+  border-radius: var(--radius);
+  padding: .85rem 1rem;
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+}
+.csv-upload-label { font-size: .85rem; color: var(--gray-600); }
+.csv-upload-label code {
+  background: var(--gray-200);
+  padding: .1rem .35rem;
+  border-radius: 4px;
+  font-size: .8rem;
+}
+.csv-upload-row { display: flex; gap: .5rem; align-items: center; }
+.file-label {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  padding: .45rem .75rem;
+  border: 1.5px solid var(--gray-300);
+  border-radius: var(--radius);
+  background: #fff;
+  cursor: pointer;
+  font-size: .88rem;
+  color: var(--gray-500);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.file-label:hover { border-color: var(--blue); color: var(--blue); }
+.file-label input[type="file"] { display: none; }
+#csv-result {
+  font-size: .85rem;
+  padding: .4rem .6rem;
+  border-radius: 5px;
+}
+#csv-result.ok   { background: var(--green-light); color: var(--green); }
+#csv-result.err  { background: var(--red-light);   color: var(--red); }
+
 /* ── Admin lists ──────────────────────────────────────────────────────────── */
 .add-form {
   display: flex;

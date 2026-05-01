@@ -2,6 +2,7 @@ import os
 import sqlite3
 import hashlib
 import json
+import csv
 from datetime import datetime, date
 from flask import Flask, request, jsonify, render_template, send_file
 import io
@@ -223,6 +224,59 @@ def update_job(job_id):
             (data["job_number"], data.get("description", ""), int(data.get("active", 1)), job_id),
         )
     return jsonify({"ok": True})
+
+
+@app.route("/api/jobs/import", methods=["POST"])
+def import_jobs_csv():
+    employee_id = request.form.get("employee_id")
+    pin = request.form.get("pin", "")
+    if not verify_admin(employee_id, pin):
+        return jsonify({"error": "Unauthorized"}), 403
+
+    file = request.files.get("file")
+    if not file:
+        return jsonify({"error": "No file uploaded"}), 400
+    if not file.filename.lower().endswith(".csv"):
+        return jsonify({"error": "File must be a .csv"}), 400
+
+    stream = io.StringIO(file.stream.read().decode("utf-8-sig"), newline="")
+    reader = csv.DictReader(stream)
+
+    # Accept flexible column names
+    headers = [h.strip().lower() for h in (reader.fieldnames or [])]
+    number_col = next((h for h in reader.fieldnames or []
+                       if h.strip().lower() in ("invoice", "invoice number",
+                                                "job number", "job", "number")), None)
+    desc_col   = next((h for h in reader.fieldnames or []
+                       if h.strip().lower() in ("title", "description",
+                                                "desc", "name")), None)
+
+    if not number_col:
+        return jsonify({"error": "Could not find an invoice/job number column. "
+                        "Expected a column named: Invoice, Invoice Number, or Job Number"}), 400
+
+    added = 0
+    skipped = 0
+    with get_db() as conn:
+        for row in reader:
+            number = (row.get(number_col) or "").strip()
+            desc   = (row.get(desc_col)   or "").strip() if desc_col else ""
+            if not number:
+                skipped += 1
+                continue
+            existing = conn.execute(
+                "SELECT id FROM jobs WHERE job_number=?", (number,)
+            ).fetchone()
+            if existing:
+                skipped += 1
+                continue
+            conn.execute(
+                "INSERT INTO jobs (job_number, description) VALUES (?, ?)",
+                (number, desc),
+            )
+            added += 1
+
+    return jsonify({"added": added, "skipped": skipped})
 
 
 @app.route("/api/tasks", methods=["GET"])
