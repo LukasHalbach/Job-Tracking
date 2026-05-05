@@ -53,16 +53,17 @@ function buildQuickHours(containerId, inputId) {
 }
 
 /* ── Combobox factory ────────────────────────────────────────────────────── */
-function makeCombo({ inputId, listId, items, getLabel, getSub, onSelect, allowFreeText = false }) {
+function makeCombo({ inputId, listId, items, getLabel, getSub, onSelect, allowFreeText = false, getSearch = null }) {
   const input = $(inputId);
   const list  = $(listId);
   let active = -1;
   let suppressBlur = false;
+  const searchFn = getSearch || (i => getLabel(i));
 
   function render(filter) {
     const q = filter.toLowerCase();
     const filtered = q
-      ? items.filter(i => getLabel(i).toLowerCase().includes(q))
+      ? items.filter(i => searchFn(i).toLowerCase().includes(q))
       : items;
     list.innerHTML = '';
     if (!filtered.length) { list.classList.add('hidden'); return; }
@@ -205,6 +206,7 @@ function initCombos() {
     items:   state.jobs,
     getLabel: j => j.job_number,
     getSub:   j => j.description || '',
+    getSearch: j => `${j.job_number} ${j.description || ''}`,
     allowFreeText: true,
     onSelect: j => { $('job-input').value = j._free ?? j.job_number; },
   });
@@ -228,6 +230,7 @@ function initCombos() {
     items:   state.jobs,
     getLabel: j => j.job_number,
     getSub:   j => j.description || '',
+    getSearch: j => `${j.job_number} ${j.description || ''}`,
     allowFreeText: true,
     onSelect: j => { $('edit-job-input').value = j._free ?? j.job_number; },
   });
@@ -253,11 +256,13 @@ async function loadJobs() {
     jobCombo = makeCombo({
       inputId: 'job-input', listId: 'job-list',
       items: state.jobs, getLabel: j => j.job_number, getSub: j => j.description || '',
+      getSearch: j => `${j.job_number} ${j.description || ''}`,
       allowFreeText: true, onSelect: j => { $('job-input').value = j._free ?? j.job_number; },
     });
     editJobCombo = makeCombo({
       inputId: 'edit-job-input', listId: 'edit-job-list',
       items: state.jobs, getLabel: j => j.job_number, getSub: j => j.description || '',
+      getSearch: j => `${j.job_number} ${j.description || ''}`,
       allowFreeText: true, onSelect: j => { $('edit-job-input').value = j._free ?? j.job_number; },
     });
   }

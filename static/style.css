@@ -304,6 +304,36 @@ body {
 @media (max-width: 580px) {
   .form-grid { grid-template-columns: 1fr; }
   .full-span { grid-column: 1; }
+
+  /* Modals fill screen width */
+  .modal, .modal-wide { max-width: 100%; border-radius: 10px; }
+  .overlay { padding: .5rem; align-items: flex-start; padding-top: 1rem; }
+  .modal-body { padding: 1.1rem 1.1rem; }
+  .modal-header { padding: 1.1rem 1.25rem 1rem; }
+
+  /* Header wraps gracefully */
+  .app-header { flex-wrap: wrap; gap: .4rem; padding: .6rem 1rem; }
+  .header-user { flex-wrap: wrap; gap: .4rem; }
+  .brand-title { font-size: .88rem; }
+
+  /* Hide description & notes columns on phones — accessible via Edit button */
+  .entries-table th:nth-child(6),
+  .entries-table td:nth-child(6),
+  .entries-table th:nth-child(7),
+  .entries-table td:nth-child(7) { display: none; }
+
+  /* Admin tabs scroll sideways */
+  .tab-bar { overflow-x: auto; flex-wrap: nowrap; padding-bottom: 2px; }
+  .tab { white-space: nowrap; }
+
+  /* Larger touch targets */
+  .edit-btn  { padding: .4rem .75rem; }
+  .toggle-btn { padding: .35rem .65rem; }
+  .quick-hours button { padding: .35rem .55rem; font-size: .8rem; }
+
+  /* Add form stacks vertically */
+  .add-form { flex-direction: column; }
+  .add-form input { width: 100%; }
 }
 
 /* ── Messages ─────────────────────────────────────────────────────────────── */
