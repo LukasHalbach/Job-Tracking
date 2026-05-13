@@ -619,6 +619,9 @@ async function loadAdminJobs() {
     const nameHtml = j.is_system
       ? `${j.job_number} <span class="system-badge">System</span>`
       : j.job_number;
+    const editBtn = !j.is_system
+      ? `<button class="edit-item-btn btn btn-sm btn-secondary" data-id="${j.id}">Edit</button>`
+      : '';
     const deleteBtn = !j.is_system
       ? `<button class="delete-perm-btn btn btn-sm btn-danger"
            data-id="${j.id}"
@@ -634,6 +637,7 @@ async function loadAdminJobs() {
                 data-id="${j.id}" data-active="${j.active}">
           ${j.active ? 'Active' : 'Inactive'}
         </button>
+        ${editBtn}
         ${deleteBtn}
       </div>`;
     list.appendChild(div);
@@ -648,6 +652,31 @@ async function loadAdminJobs() {
         active: job.active ? 0 : 1,
       });
       await Promise.all([loadAdminJobs(), loadJobs()]);
+    });
+  });
+  list.querySelectorAll('.edit-item-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const job = jobs.find(j => j.id === parseInt(btn.dataset.id));
+      const div = btn.closest('.admin-item');
+      div.innerHTML = `
+        <input class="edit-inline-input" value="${job.job_number}" placeholder="Invoice #" style="min-width:90px;flex:1" />
+        <input class="edit-inline-input" value="${job.description || ''}" placeholder="Description" style="flex:2" />
+        <div class="item-actions">
+          <button class="btn btn-sm btn-primary save-inline-btn">Save</button>
+          <button class="btn btn-sm btn-secondary cancel-inline-btn">Cancel</button>
+        </div>`;
+      div.querySelector('.save-inline-btn').addEventListener('click', async () => {
+        const inputs = div.querySelectorAll('.edit-inline-input');
+        const newNum = inputs[0].value.trim();
+        const newDesc = inputs[1].value.trim();
+        if (!newNum) { alert('Invoice number is required.'); return; }
+        await api('PUT', `/api/jobs/${job.id}`, {
+          employee_id: state.employeeId, pin: state.pin,
+          job_number: newNum, description: newDesc, active: job.active,
+        });
+        await Promise.all([loadAdminJobs(), loadJobs()]);
+      });
+      div.querySelector('.cancel-inline-btn').addEventListener('click', loadAdminJobs);
     });
   });
   list.querySelectorAll('.delete-perm-btn').forEach(btn => {
@@ -720,6 +749,9 @@ async function loadAdminTasks() {
     const nameHtml = isSystem
       ? `${t.name} <span class="system-badge">System</span>`
       : t.name;
+    const editBtn = !isSystem
+      ? `<button class="edit-item-btn btn btn-sm btn-secondary" data-id="${t.id}">Edit</button>`
+      : '';
     const deleteBtn = !isSystem
       ? `<button class="delete-perm-btn btn btn-sm btn-danger"
            data-id="${t.id}" data-label="${t.name}">
@@ -734,6 +766,7 @@ async function loadAdminTasks() {
                 data-id="${t.id}" data-active="${t.active}">
           ${t.active ? 'Active' : 'Inactive'}
         </button>
+        ${editBtn}
         ${deleteBtn}
       </div>`;
     list.appendChild(div);
@@ -747,6 +780,31 @@ async function loadAdminTasks() {
         active: task.active ? 0 : 1,
       });
       await Promise.all([loadAdminTasks(), loadTasks()]);
+    });
+  });
+  list.querySelectorAll('.edit-item-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const task = tasks.find(t => t.id === parseInt(btn.dataset.id));
+      const div = btn.closest('.admin-item');
+      div.innerHTML = `
+        <input class="edit-inline-input" value="${task.name}" placeholder="Task name" style="flex:2" />
+        <input class="edit-inline-input" value="${task.category}" placeholder="Category" style="flex:1" />
+        <div class="item-actions">
+          <button class="btn btn-sm btn-primary save-inline-btn">Save</button>
+          <button class="btn btn-sm btn-secondary cancel-inline-btn">Cancel</button>
+        </div>`;
+      div.querySelector('.save-inline-btn').addEventListener('click', async () => {
+        const inputs = div.querySelectorAll('.edit-inline-input');
+        const newName = inputs[0].value.trim();
+        const newCat  = inputs[1].value.trim();
+        if (!newName || !newCat) { alert('Task name and category are required.'); return; }
+        await api('PUT', `/api/tasks/${task.id}`, {
+          employee_id: state.employeeId, pin: state.pin,
+          name: newName, category: newCat, active: task.active,
+        });
+        await Promise.all([loadAdminTasks(), loadTasks()]);
+      });
+      div.querySelector('.cancel-inline-btn').addEventListener('click', loadAdminTasks);
     });
   });
   list.querySelectorAll('.delete-perm-btn').forEach(btn => {

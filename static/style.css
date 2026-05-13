@@ -672,6 +672,22 @@ body {
 .admin-item .item-meta { color: var(--gray-400); font-size: .78rem; }
 .admin-item .item-actions { display: flex; gap: .3rem; }
 
+.edit-inline-input {
+  flex: 1;
+  min-width: 80px;
+  padding: .3rem .5rem;
+  border: 1.5px solid var(--blue);
+  border-radius: var(--radius);
+  font-size: .88rem;
+  font-family: var(--font);
+  color: var(--gray-800);
+  background: #fff;
+}
+.edit-inline-input:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(42,122,42,.15);
+}
+
 .toggle-btn {
   padding: .2rem .55rem;
   border: 1px solid var(--gray-300);
