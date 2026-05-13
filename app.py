@@ -333,9 +333,10 @@ def list_entries():
     all_employees = request.args.get("all_employees") == "1"
 
     query = """
-        SELECT te.*, e.name as employee_name
+        SELECT te.*, e.name as employee_name, j.description as job_description
         FROM time_entries te
         JOIN employees e ON te.employee_id = e.id
+        LEFT JOIN jobs j ON te.job_id = j.id
         WHERE 1=1
     """
     params = []
@@ -526,6 +527,21 @@ def admin_update_employee(emp_id):
                 (data["name"], int(data.get("is_admin", 0)),
                  int(data.get("active", 1)), emp_id),
             )
+    return jsonify({"ok": True})
+
+
+@app.route("/api/employees/<int:emp_id>/change-pin", methods=["POST"])
+def change_pin(emp_id):
+    data = request.json
+    old_pin = str(data.get("old_pin", ""))
+    new_pin = str(data.get("new_pin", ""))
+    if not verify_employee(emp_id, old_pin):
+        return jsonify({"error": "Current PIN is incorrect"}), 401
+    if not new_pin:
+        return jsonify({"error": "New PIN is required"}), 400
+    with get_db() as conn:
+        conn.execute("UPDATE employees SET pin_hash=? WHERE id=?",
+                     (hash_pin(new_pin), emp_id))
     return jsonify({"ok": True})
 
 

@@ -244,6 +244,63 @@ body {
 }
 .pin-row input { flex: 1; }
 
+/* ── Job tag field ────────────────────────────────────────────────────────── */
+.tag-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .35rem;
+  padding: .4rem .5rem;
+  border: 1.5px solid var(--gray-300);
+  border-radius: var(--radius);
+  background: #fff;
+  min-height: 40px;
+  cursor: text;
+  transition: border-color .15s, box-shadow .15s;
+}
+.tag-field:focus-within {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(42,122,42,.15);
+}
+.tag-field input {
+  flex: 1;
+  min-width: 160px;
+  border: none !important;
+  outline: none;
+  box-shadow: none !important;
+  padding: .1rem .25rem;
+  font-size: .93rem;
+  font-family: var(--font);
+  color: var(--gray-800);
+  background: transparent;
+  width: auto;
+}
+
+.job-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: .25rem;
+  background: var(--blue-light);
+  color: var(--blue-dark);
+  border: 1px solid #b3ddb3;
+  border-radius: 5px;
+  padding: .2rem .5rem;
+  font-size: .82rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.job-tag button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--blue-dark);
+  font-size: .75rem;
+  padding: 0 .1rem;
+  opacity: .65;
+  line-height: 1;
+}
+.job-tag button:hover { opacity: 1; }
+
 /* ── Combobox ─────────────────────────────────────────────────────────────── */
 .combo-wrap { position: relative; }
 .combo-list {

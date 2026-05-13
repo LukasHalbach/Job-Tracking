@@ -7,6 +7,7 @@ const state = {
   jobs: [],
   tasks: [],
   entries: [],
+  selectedJobs: [],
 };
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
@@ -52,12 +53,40 @@ function buildQuickHours(containerId, inputId) {
   });
 }
 
+/* ── Job tags ────────────────────────────────────────────────────────────── */
+function renderJobTags() {
+  const field = $('job-tag-field');
+  field.querySelectorAll('.job-tag').forEach(t => t.remove());
+  const input = $('job-input');
+  state.selectedJobs.forEach((j, idx) => {
+    const tag = document.createElement('span');
+    tag.className = 'job-tag';
+    tag.textContent = j._free ?? j.job_number;
+    const rm = document.createElement('button');
+    rm.type = 'button';
+    rm.textContent = '✕';
+    rm.addEventListener('click', () => {
+      state.selectedJobs.splice(idx, 1);
+      renderJobTags();
+    });
+    tag.appendChild(rm);
+    field.insertBefore(tag, input);
+  });
+  $('split-job-wrap').style.display = state.selectedJobs.length >= 2 ? '' : 'none';
+}
+
 /* ── Combobox factory ────────────────────────────────────────────────────── */
-function makeCombo({ inputId, listId, items, getLabel, getSub, onSelect, allowFreeText = false, getSearch = null }) {
+function makeCombo({
+  inputId, listId, items, getLabel, getSub, onSelect,
+  allowFreeText = false, getSearch = null,
+  clearOnFocus = false, setInputOnSelect = true,
+}) {
   const input = $(inputId);
   const list  = $(listId);
   let active = -1;
   let suppressBlur = false;
+  let savedValue = '';
+  let didSelect = false;
   const searchFn = getSearch || (i => getLabel(i));
 
   function render(filter) {
@@ -67,7 +96,7 @@ function makeCombo({ inputId, listId, items, getLabel, getSub, onSelect, allowFr
       : items;
     list.innerHTML = '';
     if (!filtered.length) { list.classList.add('hidden'); return; }
-    filtered.slice(0, 60).forEach((item, idx) => {
+    filtered.slice(0, 60).forEach(item => {
       const li = document.createElement('li');
       const label = document.createElement('span');
       label.textContent = getLabel(item);
@@ -80,8 +109,9 @@ function makeCombo({ inputId, listId, items, getLabel, getSub, onSelect, allowFr
       }
       li.addEventListener('mousedown', () => { suppressBlur = true; });
       li.addEventListener('click', () => {
+        didSelect = true;
         onSelect(item);
-        input.value = getLabel(item);
+        if (setInputOnSelect) input.value = getLabel(item);
         list.classList.add('hidden');
         suppressBlur = false;
       });
@@ -92,14 +122,29 @@ function makeCombo({ inputId, listId, items, getLabel, getSub, onSelect, allowFr
   }
 
   input.addEventListener('input', () => render(input.value));
-  input.addEventListener('focus', () => render(input.value));
+
+  if (clearOnFocus) {
+    input.addEventListener('focus', () => {
+      savedValue = input.value;
+      didSelect = false;
+      input.value = '';
+      render('');
+    });
+  } else {
+    input.addEventListener('focus', () => render(input.value));
+  }
+
   input.addEventListener('blur', () => {
     if (suppressBlur) return;
     setTimeout(() => list.classList.add('hidden'), 150);
+    if (clearOnFocus && !didSelect) {
+      input.value = savedValue;
+    }
     if (allowFreeText && input.value.trim()) {
       onSelect({ _free: input.value.trim() });
     }
   });
+
   input.addEventListener('keydown', e => {
     const lis = list.querySelectorAll('li');
     if (e.key === 'ArrowDown') {
@@ -117,6 +162,69 @@ function makeCombo({ inputId, listId, items, getLabel, getSub, onSelect, allowFr
   });
 
   return { refresh: () => render(input.value) };
+}
+
+/* ── Combo instances ─────────────────────────────────────────────────────── */
+let jobCombo, taskCombo, editJobCombo, editTaskCombo;
+
+function initCombos() {
+  jobCombo = makeCombo({
+    inputId: 'job-input',
+    listId:  'job-list',
+    items:   state.jobs,
+    getLabel: j => j.job_number,
+    getSub:   j => j.description || '',
+    getSearch: j => `${j.job_number} ${j.description || ''}`,
+    allowFreeText: true,
+    setInputOnSelect: false,
+    onSelect: j => {
+      const label = j._free ?? j.job_number;
+      if (!state.selectedJobs.find(s => (s._free ?? s.job_number) === label)) {
+        state.selectedJobs.push(j);
+        renderJobTags();
+      }
+      $('job-input').value = '';
+    },
+  });
+
+  taskCombo = makeCombo({
+    inputId: 'task-input',
+    listId:  'task-list',
+    items:   state.tasks,
+    getLabel: t => t.name,
+    getSub:   t => t.category,
+    clearOnFocus: true,
+    onSelect: t => {
+      $('task-input').value = t.name;
+      $('category').value   = t.category;
+      $('notes-wrap').classList.toggle('hidden', t.name !== 'Not Listed');
+    },
+  });
+
+  editJobCombo = makeCombo({
+    inputId: 'edit-job-input',
+    listId:  'edit-job-list',
+    items:   state.jobs,
+    getLabel: j => j.job_number,
+    getSub:   j => j.description || '',
+    getSearch: j => `${j.job_number} ${j.description || ''}`,
+    allowFreeText: true,
+    onSelect: j => { $('edit-job-input').value = j._free ?? j.job_number; },
+  });
+
+  editTaskCombo = makeCombo({
+    inputId: 'edit-task-input',
+    listId:  'edit-task-list',
+    items:   state.tasks,
+    getLabel: t => t.name,
+    getSub:   t => t.category,
+    clearOnFocus: true,
+    onSelect: t => {
+      $('edit-task-input').value = t.name;
+      $('edit-category').value   = t.category;
+      $('edit-notes-wrap').classList.toggle('hidden', t.name !== 'Not Listed');
+    },
+  });
 }
 
 /* ── Login ───────────────────────────────────────────────────────────────── */
@@ -175,81 +283,45 @@ $('switch-user-btn').addEventListener('click', () => {
   loadEmployeeList();
 });
 
+/* ── Change PIN ──────────────────────────────────────────────────────────── */
+$('change-pin-btn').addEventListener('click', () => {
+  $('change-old-pin').value = '';
+  $('change-new-pin').value = '';
+  $('change-confirm-pin').value = '';
+  $('change-pin-error').classList.add('hidden');
+  $('change-pin-success').classList.add('hidden');
+  showOverlay('change-pin-overlay');
+});
+
+$('change-pin-cancel-btn').addEventListener('click', () => hideOverlay('change-pin-overlay'));
+
+$('change-pin-save-btn').addEventListener('click', async () => {
+  const oldPin     = $('change-old-pin').value;
+  const newPin     = $('change-new-pin').value;
+  const confirmPin = $('change-confirm-pin').value;
+  const errEl = $('change-pin-error');
+  const okEl  = $('change-pin-success');
+  errEl.classList.add('hidden');
+  okEl.classList.add('hidden');
+
+  if (!oldPin) { showMsg(errEl, 'Please enter your current PIN.'); return; }
+  if (!newPin) { showMsg(errEl, 'Please enter a new PIN.'); return; }
+  if (newPin !== confirmPin) { showMsg(errEl, 'New PINs do not match.'); return; }
+
+  try {
+    await api('POST', `/api/employees/${state.employeeId}/change-pin`, {
+      old_pin: oldPin,
+      new_pin: newPin,
+    });
+    state.pin = newPin;
+    showMsg(okEl, 'PIN changed successfully!', 'success');
+    setTimeout(() => hideOverlay('change-pin-overlay'), 1500);
+  } catch (e) {
+    showMsg(errEl, e.message);
+  }
+});
+
 /* ── Load data ───────────────────────────────────────────────────────────── */
-async function loadJobs() {
-  state.jobs = await api('GET', '/api/jobs');
-  jobCombo.refresh();
-  editJobCombo.refresh();
-}
-
-async function loadTasks() {
-  state.tasks = await api('GET', '/api/tasks');
-  taskCombo.refresh();
-  editTaskCombo.refresh();
-}
-
-async function loadEntries() {
-  const dateFilter = $('filter-date').value;
-  let url = `/api/entries?employee_id=${state.employeeId}`;
-  if (dateFilter) url += `&date_from=${dateFilter}&date_to=${dateFilter}`;
-  state.entries = await api('GET', url);
-  renderEntries();
-}
-
-/* ── Entry form combos ───────────────────────────────────────────────────── */
-let jobCombo, taskCombo, editJobCombo, editTaskCombo;
-
-function initCombos() {
-  jobCombo = makeCombo({
-    inputId: 'job-input',
-    listId:  'job-list',
-    items:   state.jobs,
-    getLabel: j => j.job_number,
-    getSub:   j => j.description || '',
-    getSearch: j => `${j.job_number} ${j.description || ''}`,
-    allowFreeText: true,
-    onSelect: j => { $('job-input').value = j._free ?? j.job_number; },
-  });
-
-  taskCombo = makeCombo({
-    inputId: 'task-input',
-    listId:  'task-list',
-    items:   state.tasks,
-    getLabel: t => t.name,
-    getSub:   t => t.category,
-    onSelect: t => {
-      $('task-input').value = t.name;
-      $('category').value   = t.category;
-      $('notes-wrap').classList.toggle('hidden', t.name !== 'Not Listed');
-    },
-  });
-
-  editJobCombo = makeCombo({
-    inputId: 'edit-job-input',
-    listId:  'edit-job-list',
-    items:   state.jobs,
-    getLabel: j => j.job_number,
-    getSub:   j => j.description || '',
-    getSearch: j => `${j.job_number} ${j.description || ''}`,
-    allowFreeText: true,
-    onSelect: j => { $('edit-job-input').value = j._free ?? j.job_number; },
-  });
-
-  editTaskCombo = makeCombo({
-    inputId: 'edit-task-input',
-    listId:  'edit-task-list',
-    items:   state.tasks,
-    getLabel: t => t.name,
-    getSub:   t => t.category,
-    onSelect: t => {
-      $('edit-task-input').value = t.name;
-      $('edit-category').value   = t.category;
-      $('edit-notes-wrap').classList.toggle('hidden', t.name !== 'Not Listed');
-    },
-  });
-}
-
-// Rebuild combos when data loads (items array is live reference so just re-init)
 async function loadJobs() {
   state.jobs = await api('GET', '/api/jobs');
   if (jobCombo) {
@@ -257,13 +329,22 @@ async function loadJobs() {
       inputId: 'job-input', listId: 'job-list',
       items: state.jobs, getLabel: j => j.job_number, getSub: j => j.description || '',
       getSearch: j => `${j.job_number} ${j.description || ''}`,
-      allowFreeText: true, onSelect: j => { $('job-input').value = j._free ?? j.job_number; },
+      allowFreeText: true, setInputOnSelect: false,
+      onSelect: j => {
+        const label = j._free ?? j.job_number;
+        if (!state.selectedJobs.find(s => (s._free ?? s.job_number) === label)) {
+          state.selectedJobs.push(j);
+          renderJobTags();
+        }
+        $('job-input').value = '';
+      },
     });
     editJobCombo = makeCombo({
       inputId: 'edit-job-input', listId: 'edit-job-list',
       items: state.jobs, getLabel: j => j.job_number, getSub: j => j.description || '',
       getSearch: j => `${j.job_number} ${j.description || ''}`,
-      allowFreeText: true, onSelect: j => { $('edit-job-input').value = j._free ?? j.job_number; },
+      allowFreeText: true,
+      onSelect: j => { $('edit-job-input').value = j._free ?? j.job_number; },
     });
   }
 }
@@ -274,6 +355,7 @@ async function loadTasks() {
     taskCombo = makeCombo({
       inputId: 'task-input', listId: 'task-list',
       items: state.tasks, getLabel: t => t.name, getSub: t => t.category,
+      clearOnFocus: true,
       onSelect: t => {
         $('task-input').value = t.name;
         $('category').value   = t.category;
@@ -283,6 +365,7 @@ async function loadTasks() {
     editTaskCombo = makeCombo({
       inputId: 'edit-task-input', listId: 'edit-task-list',
       items: state.tasks, getLabel: t => t.name, getSub: t => t.category,
+      clearOnFocus: true,
       onSelect: t => {
         $('edit-task-input').value = t.name;
         $('edit-category').value   = t.category;
@@ -292,9 +375,19 @@ async function loadTasks() {
   }
 }
 
+async function loadEntries() {
+  const dateFilter = $('filter-date').value;
+  let url = `/api/entries?employee_id=${state.employeeId}`;
+  if (dateFilter) url += `&date_from=${dateFilter}&date_to=${dateFilter}`;
+  state.entries = await api('GET', url);
+  renderEntries();
+}
+
 /* ── Entry form ──────────────────────────────────────────────────────────── */
 function clearForm() {
   $('entry-date').value   = today();
+  state.selectedJobs = [];
+  renderJobTags();
   $('job-input').value    = '';
   $('task-input').value   = '';
   $('category').value     = '';
@@ -302,6 +395,7 @@ function clearForm() {
   $('description').value  = '';
   $('notes').value        = '';
   $('notes-wrap').classList.add('hidden');
+  $('split-job').checked  = false;
   $('entry-error').classList.add('hidden');
   $('entry-success').classList.add('hidden');
 }
@@ -311,32 +405,36 @@ $('clear-btn').addEventListener('click', clearForm);
 $('submit-btn').addEventListener('click', async () => {
   const err = $('entry-error');
   err.classList.add('hidden');
-  const jobNumber = $('job-input').value.trim();
   const taskName  = $('task-input').value.trim();
   const category  = $('category').value.trim();
   const hours     = parseFloat($('hours').value);
   const desc      = $('description').value.trim();
   const notes     = $('notes').value.trim();
   const entryDate = $('entry-date').value;
+  const split     = $('split-job').checked;
 
-  if (!jobNumber) { showMsg(err, 'Please enter a Job / Invoice number.'); return; }
+  if (!state.selectedJobs.length) { showMsg(err, 'Please enter a Job / Invoice number.'); return; }
   if (!taskName)  { showMsg(err, 'Please select a task.'); return; }
   if (!category)  { showMsg(err, 'Category could not be determined. Please re-select the task.'); return; }
   if (!hours || hours <= 0) { showMsg(err, 'Please enter a valid number of hours.'); return; }
   if (taskName === 'Not Listed' && !notes) { showMsg(err, 'Please describe the task in the Notes field.'); return; }
 
+  const jobHours = split ? round2(hours / state.selectedJobs.length) : hours;
+
   try {
-    await api('POST', '/api/entries', {
-      employee_id: state.employeeId,
-      pin: state.pin,
-      entry_date: entryDate,
-      job_number: jobNumber,
-      task_name:  taskName,
-      category,
-      hours,
-      description: desc,
-      notes,
-    });
+    await Promise.all(state.selectedJobs.map(j =>
+      api('POST', '/api/entries', {
+        employee_id: state.employeeId,
+        pin: state.pin,
+        entry_date: entryDate,
+        job_number: j._free ?? j.job_number,
+        task_name:  taskName,
+        category,
+        hours: jobHours,
+        description: desc,
+        notes,
+      })
+    ));
     showMsg($('entry-success'), 'Entry saved successfully!', 'success');
     clearForm();
     await loadEntries();
@@ -359,10 +457,13 @@ function renderEntries() {
   let total = 0;
   state.entries.forEach(e => {
     total += e.hours;
+    const jobDisplay = e.job_description
+      ? `${e.job_number} — ${e.job_description}`
+      : e.job_number;
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${e.entry_date}</td>
-      <td title="${e.job_number}">${e.job_number}</td>
+      <td title="${jobDisplay}">${jobDisplay}</td>
       <td title="${e.task_name}">${e.task_name}</td>
       <td title="${e.category}">${e.category}</td>
       <td><strong>${e.hours}</strong></td>
@@ -405,7 +506,7 @@ function openEditModal(id) {
 $('edit-cancel-btn').addEventListener('click', () => hideOverlay('edit-overlay'));
 
 $('edit-save-btn').addEventListener('click', async () => {
-  const id       = parseInt($('edit-entry-id').value);
+  const id        = parseInt($('edit-entry-id').value);
   const jobNumber = $('edit-job-input').value.trim();
   const taskName  = $('edit-task-input').value.trim();
   const category  = $('edit-category').value.trim();
