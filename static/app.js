@@ -72,6 +72,8 @@ function renderJobTags() {
     tag.appendChild(rm);
     field.insertBefore(tag, input);
   });
+  const hasShop = state.selectedJobs.some(j => (j._free ?? j.job_number) === 'Shop');
+  input.style.display = hasShop ? 'none' : '';
   $('split-job-wrap').style.display = state.selectedJobs.length >= 2 ? '' : 'none';
 }
 
@@ -179,10 +181,18 @@ function initCombos() {
     setInputOnSelect: false,
     onSelect: j => {
       const label = j._free ?? j.job_number;
-      if (!state.selectedJobs.find(s => (s._free ?? s.job_number) === label)) {
-        state.selectedJobs.push(j);
-        renderJobTags();
+      if (label === 'Shop') {
+        state.selectedJobs = [j];
+      } else {
+        if (state.selectedJobs.some(s => (s._free ?? s.job_number) === 'Shop')) {
+          $('job-input').value = '';
+          return;
+        }
+        if (!state.selectedJobs.find(s => (s._free ?? s.job_number) === label)) {
+          state.selectedJobs.push(j);
+        }
       }
+      renderJobTags();
       $('job-input').value = '';
     },
   });
