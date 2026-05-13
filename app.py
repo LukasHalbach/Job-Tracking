@@ -18,8 +18,6 @@ TASKS = [
     ("Sheet Printing",              "Printing"),
     ("Direct to Fabric Printing",   "Printing"),
     ("On-Site Printing",            "Printing"),
-    ("Roll Cutting",                "Cutting"),
-    ("Sheet Cutting",               "Cutting"),
     ("Contour Cutting",             "Cutting"),
     ("Foam Cutting",                "Cutting"),
     ("Laminating",                  "Finishing"),
