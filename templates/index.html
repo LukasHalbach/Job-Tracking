@@ -37,6 +37,39 @@
   </div>
 </div>
 
+<!-- ── Change PIN Modal ───────────────────────────────────────────────────── -->
+<div id="change-pin-overlay" class="overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Change PIN</h2>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label for="change-old-pin">Current PIN</label>
+        <input id="change-old-pin" type="password" inputmode="numeric"
+               maxlength="8" placeholder="Enter current PIN" autocomplete="off" />
+      </div>
+      <div class="field">
+        <label for="change-new-pin">New PIN</label>
+        <input id="change-new-pin" type="password" inputmode="numeric"
+               maxlength="8" placeholder="Enter new PIN" autocomplete="off" />
+      </div>
+      <div class="field">
+        <label for="change-confirm-pin">Confirm New PIN</label>
+        <input id="change-confirm-pin" type="password" inputmode="numeric"
+               maxlength="8" placeholder="Re-enter new PIN" autocomplete="off" />
+      </div>
+      <div id="change-pin-error" class="error-msg hidden"></div>
+      <div id="change-pin-success" class="success-msg hidden"></div>
+      <div class="modal-actions">
+        <div class="spacer"></div>
+        <button class="btn btn-secondary" id="change-pin-cancel-btn">Cancel</button>
+        <button class="btn btn-primary" id="change-pin-save-btn">Save PIN</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ── Edit Entry Modal ───────────────────────────────────────────────────── -->
 <div id="edit-overlay" class="overlay">
   <div class="modal modal-wide">
@@ -58,7 +91,7 @@
           </div>
         </div>
         <div class="field">
-          <label>Task <span class="hint">— if your task isn't listed, select <strong>Not Listed</strong></span></label>
+          <label>Task <span class="hint">— select <strong>Not Listed</strong> if not in the list</span></label>
           <div class="combo-wrap">
             <input type="text" id="edit-task-input" placeholder="Search task…" autocomplete="off" />
             <ul class="combo-list hidden" id="edit-task-list"></ul>
@@ -117,7 +150,6 @@
           <input type="text" id="new-job-desc" placeholder="Title / Description (optional)" />
           <button class="btn btn-primary" id="add-job-btn">Add Job</button>
         </div>
-
         <div class="csv-upload-section">
           <div class="csv-upload-label">
             <strong>Bulk import from CSV</strong>
@@ -132,7 +164,6 @@
           </div>
           <div id="csv-result" class="hidden"></div>
         </div>
-
         <div class="admin-list" id="jobs-list"></div>
       </div>
 
@@ -188,6 +219,7 @@
     </div>
     <div class="header-user">
       <span id="header-name">—</span>
+      <button class="btn btn-sm btn-outline" id="change-pin-btn">Change PIN</button>
       <button class="btn btn-sm btn-secondary" id="admin-btn" style="display:none">Admin</button>
       <button class="btn btn-sm btn-outline" id="switch-user-btn">Switch User</button>
     </div>
@@ -205,17 +237,30 @@
           <input type="date" id="entry-date" />
         </div>
 
-        <div class="field">
-          <label for="job-input">Job / Invoice # or Name <span class="required">*</span></label>
+        <!-- spacer to keep date half-width -->
+        <div></div>
+
+        <div class="field full-span">
+          <label>Job / Invoice # or Name <span class="required">*</span></label>
           <div class="combo-wrap">
-            <input type="text" id="job-input" placeholder="Search by invoice # or name…"
-                   autocomplete="off" />
+            <div class="tag-field" id="job-tag-field">
+              <input type="text" id="job-input" placeholder="Search by invoice # or name…" autocomplete="off" />
+            </div>
             <ul class="combo-list hidden" id="job-list"></ul>
           </div>
         </div>
 
+        <div class="field full-span" id="split-job-wrap" style="display:none">
+          <label class="checkbox-label">
+            <input type="checkbox" id="split-job" />
+            <strong>Split Job</strong> — divide hours equally between all selected jobs
+          </label>
+        </div>
+
         <div class="field">
-          <label for="task-input">Task <span class="required">*</span> <span class="hint">— if your task isn't listed, select <strong>Not Listed</strong></span></label>
+          <label for="task-input">Task <span class="required">*</span>
+            <span class="hint">— if not listed, select <strong>Not Listed</strong> and describe in Notes</span>
+          </label>
           <div class="combo-wrap">
             <input type="text" id="task-input" placeholder="Search task…"
                    autocomplete="off" />
@@ -244,8 +289,10 @@
                  placeholder="Brief description of work done…" />
         </div>
 
-        <div class="field full-span" id="notes-wrap">
-          <label for="notes">Notes <span class="hint">(required when task is Not Listed)</span></label>
+        <div class="field full-span hidden" id="notes-wrap">
+          <label for="notes">Notes <span class="required">*</span>
+            <span class="hint">(required when task is Not Listed)</span>
+          </label>
           <textarea id="notes" rows="2"
                     placeholder="Describe the task if not listed above…"></textarea>
         </div>
@@ -275,7 +322,7 @@
           <thead>
             <tr>
               <th>Date</th>
-              <th>Job #</th>
+              <th>Job</th>
               <th>Task</th>
               <th>Category</th>
               <th>Hrs</th>
