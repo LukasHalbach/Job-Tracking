@@ -572,6 +572,42 @@ document.querySelectorAll('.tab').forEach(tab => {
   });
 });
 
+/* ── Delete confirm modal ────────────────────────────────────────────────── */
+let deleteTarget = null;
+
+function openDeleteConfirm(type, id, label, note) {
+  deleteTarget = { type, id };
+  $('delete-confirm-label').textContent = `Delete "${label}"?`;
+  $('delete-confirm-note').textContent = note;
+  $('delete-admin-pin').value = '';
+  $('delete-confirm-error').classList.add('hidden');
+  showOverlay('delete-confirm-overlay');
+}
+
+$('delete-confirm-cancel').addEventListener('click', () => hideOverlay('delete-confirm-overlay'));
+
+$('delete-confirm-ok').addEventListener('click', async () => {
+  const adminPin = $('delete-admin-pin').value;
+  const errEl = $('delete-confirm-error');
+  errEl.classList.add('hidden');
+  if (!adminPin) { showMsg(errEl, 'Admin PIN is required.'); return; }
+
+  try {
+    await api('DELETE', `/api/${deleteTarget.type}s/${deleteTarget.id}`, {
+      employee_id: state.employeeId,
+      pin: adminPin,
+    });
+    hideOverlay('delete-confirm-overlay');
+    if (deleteTarget.type === 'job') {
+      await Promise.all([loadAdminJobs(), loadJobs()]);
+    } else {
+      await Promise.all([loadAdminTasks(), loadTasks()]);
+    }
+  } catch (e) {
+    showMsg(errEl, e.message);
+  }
+});
+
 /* ── Admin: Jobs ─────────────────────────────────────────────────────────── */
 async function loadAdminJobs() {
   const jobs = await api('GET', '/api/jobs?all=1');
@@ -580,14 +616,25 @@ async function loadAdminJobs() {
   jobs.forEach(j => {
     const div = document.createElement('div');
     div.className = `admin-item ${j.active ? '' : 'inactive'}`;
+    const nameHtml = j.is_system
+      ? `${j.job_number} <span class="system-badge">System</span>`
+      : j.job_number;
+    const deleteBtn = !j.is_system
+      ? `<button class="delete-perm-btn btn btn-sm btn-danger"
+           data-id="${j.id}"
+           data-label="${j.job_number}${j.description ? ' — ' + j.description : ''}">
+           Delete
+         </button>`
+      : '';
     div.innerHTML = `
-      <span class="item-name">${j.job_number}</span>
+      <span class="item-name">${nameHtml}</span>
       <span class="item-meta">${j.description || ''}</span>
       <div class="item-actions">
         <button class="toggle-btn ${j.active ? 'active' : 'inactive'}"
                 data-id="${j.id}" data-active="${j.active}">
           ${j.active ? 'Active' : 'Inactive'}
         </button>
+        ${deleteBtn}
       </div>`;
     list.appendChild(div);
   });
@@ -601,6 +648,14 @@ async function loadAdminJobs() {
         active: job.active ? 0 : 1,
       });
       await Promise.all([loadAdminJobs(), loadJobs()]);
+    });
+  });
+  list.querySelectorAll('.delete-perm-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      openDeleteConfirm(
+        'job', parseInt(btn.dataset.id), btn.dataset.label,
+        'Existing time entries that used this job will keep their recorded job number and hours — nothing in past entries is lost. The job will no longer appear in the dropdown.'
+      );
     });
   });
 }
@@ -661,14 +716,25 @@ async function loadAdminTasks() {
   tasks.forEach(t => {
     const div = document.createElement('div');
     div.className = `admin-item ${t.active ? '' : 'inactive'}`;
+    const isSystem = t.name === 'Not Listed';
+    const nameHtml = isSystem
+      ? `${t.name} <span class="system-badge">System</span>`
+      : t.name;
+    const deleteBtn = !isSystem
+      ? `<button class="delete-perm-btn btn btn-sm btn-danger"
+           data-id="${t.id}" data-label="${t.name}">
+           Delete
+         </button>`
+      : '';
     div.innerHTML = `
-      <span class="item-name">${t.name}</span>
+      <span class="item-name">${nameHtml}</span>
       <span class="item-meta">${t.category}</span>
       <div class="item-actions">
         <button class="toggle-btn ${t.active ? 'active' : 'inactive'}"
                 data-id="${t.id}" data-active="${t.active}">
           ${t.active ? 'Active' : 'Inactive'}
         </button>
+        ${deleteBtn}
       </div>`;
     list.appendChild(div);
   });
@@ -681,6 +747,14 @@ async function loadAdminTasks() {
         active: task.active ? 0 : 1,
       });
       await Promise.all([loadAdminTasks(), loadTasks()]);
+    });
+  });
+  list.querySelectorAll('.delete-perm-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      openDeleteConfirm(
+        'task', parseInt(btn.dataset.id), btn.dataset.label,
+        'Existing time entries that used this task will keep their recorded task name, category, and hours — nothing in past entries is lost. The task will be permanently removed and cannot be restored.'
+      );
     });
   });
 }

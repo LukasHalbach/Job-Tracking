@@ -109,6 +109,46 @@ body {
   filter: brightness(0) invert(1);
 }
 
+.modal-header-danger {
+  background: linear-gradient(135deg, #c81e1e 0%, #991b1b 100%);
+}
+
+.delete-confirm-label {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--gray-800);
+  margin-bottom: .75rem;
+  word-break: break-word;
+}
+
+.delete-warning {
+  background: var(--red-light);
+  border: 1px solid #fca5a5;
+  border-radius: var(--radius);
+  padding: .75rem 1rem;
+  font-size: .88rem;
+  line-height: 1.6;
+  display: flex;
+  flex-direction: column;
+  gap: .35rem;
+  color: var(--gray-700);
+}
+
+.system-badge {
+  display: inline-block;
+  font-size: .68rem;
+  font-weight: 700;
+  background: var(--blue-light);
+  color: var(--blue-dark);
+  border: 1px solid #b3ddb3;
+  border-radius: 4px;
+  padding: .1rem .35rem;
+  margin-left: .3rem;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  vertical-align: middle;
+}
+
 .btn-close {
   position: absolute;
   top: .75rem; right: .75rem;
