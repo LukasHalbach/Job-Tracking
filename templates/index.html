@@ -128,6 +128,33 @@
   </div>
 </div>
 
+<!-- ── Delete Confirm Modal ───────────────────────────────────────────────── -->
+<div id="delete-confirm-overlay" class="overlay">
+  <div class="modal">
+    <div class="modal-header modal-header-danger">
+      <h2>Permanent Delete</h2>
+    </div>
+    <div class="modal-body">
+      <p id="delete-confirm-label" class="delete-confirm-label"></p>
+      <div class="delete-warning">
+        <p>This <strong>cannot be undone.</strong> The record will be removed from the system permanently.</p>
+        <p id="delete-confirm-note"></p>
+      </div>
+      <div class="field" style="margin-top:1rem">
+        <label for="delete-admin-pin">Enter Admin PIN to confirm</label>
+        <input id="delete-admin-pin" type="password" inputmode="numeric"
+               maxlength="8" placeholder="Admin PIN" autocomplete="off" />
+      </div>
+      <div id="delete-confirm-error" class="error-msg hidden"></div>
+      <div class="modal-actions">
+        <div class="spacer"></div>
+        <button class="btn btn-secondary" id="delete-confirm-cancel">Cancel</button>
+        <button class="btn btn-danger" id="delete-confirm-ok">Delete Permanently</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ── Admin Modal ────────────────────────────────────────────────────────── -->
 <div id="admin-overlay" class="overlay">
   <div class="modal modal-wide">

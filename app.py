@@ -88,6 +88,7 @@ def init_db():
                 job_number TEXT NOT NULL,
                 description TEXT DEFAULT '',
                 active INTEGER DEFAULT 1,
+                is_system INTEGER DEFAULT 0,
                 created_at TEXT DEFAULT (datetime('now'))
             );
 
@@ -115,6 +116,21 @@ def init_db():
                 FOREIGN KEY (employee_id) REFERENCES employees(id)
             );
         """)
+
+        # Migrate: add is_system column to jobs if not present
+        try:
+            conn.execute("ALTER TABLE jobs ADD COLUMN is_system INTEGER DEFAULT 0")
+        except Exception:
+            pass
+
+        # Seed the protected "Shop" system job
+        shop = conn.execute("SELECT id FROM jobs WHERE job_number='Shop'").fetchone()
+        if not shop:
+            conn.execute(
+                "INSERT INTO jobs (job_number, description, is_system) VALUES ('Shop', 'General shop work', 1)"
+            )
+        else:
+            conn.execute("UPDATE jobs SET is_system=1 WHERE job_number='Shop'")
 
         # Sync tasks — add new, reactivate returning, deactivate removed
         canonical = {name: category for name, category in TASKS}
@@ -190,11 +206,11 @@ def list_jobs():
     with get_db() as conn:
         if show_all:
             rows = conn.execute(
-                "SELECT * FROM jobs ORDER BY active DESC, job_number"
+                "SELECT * FROM jobs ORDER BY is_system DESC, active DESC, job_number"
             ).fetchall()
         else:
             rows = conn.execute(
-                "SELECT * FROM jobs WHERE active=1 ORDER BY job_number"
+                "SELECT * FROM jobs WHERE active=1 ORDER BY is_system DESC, job_number"
             ).fetchall()
     return jsonify([dict(r) for r in rows])
 
@@ -225,6 +241,21 @@ def update_job(job_id):
             "UPDATE jobs SET job_number=?, description=?, active=? WHERE id=?",
             (data["job_number"], data.get("description", ""), int(data.get("active", 1)), job_id),
         )
+    return jsonify({"ok": True})
+
+
+@app.route("/api/jobs/<int:job_id>", methods=["DELETE"])
+def delete_job(job_id):
+    data = request.json
+    if not verify_admin(data.get("employee_id"), str(data.get("pin", ""))):
+        return jsonify({"error": "Unauthorized — admin PIN required"}), 403
+    with get_db() as conn:
+        job = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+        if not job:
+            return jsonify({"error": "Job not found"}), 404
+        if job["is_system"]:
+            return jsonify({"error": "System jobs cannot be deleted"}), 403
+        conn.execute("DELETE FROM jobs WHERE id=?", (job_id,))
     return jsonify({"ok": True})
 
 
@@ -267,9 +298,13 @@ def import_jobs_csv():
                 skipped += 1
                 continue
             existing = conn.execute(
-                "SELECT id FROM jobs WHERE job_number=?", (number,)
+                "SELECT id, is_system FROM jobs WHERE job_number=?", (number,)
             ).fetchone()
             if existing:
+                skipped += 1
+                continue
+            # Never import a row that would shadow a system job name
+            if number.lower() == 'shop':
                 skipped += 1
                 continue
             conn.execute(
@@ -322,6 +357,21 @@ def update_task(task_id):
             "UPDATE tasks SET name=?, category=?, active=? WHERE id=?",
             (data["name"], data["category"], int(data.get("active", 1)), task_id),
         )
+    return jsonify({"ok": True})
+
+
+@app.route("/api/tasks/<int:task_id>", methods=["DELETE"])
+def delete_task(task_id):
+    data = request.json
+    if not verify_admin(data.get("employee_id"), str(data.get("pin", ""))):
+        return jsonify({"error": "Unauthorized — admin PIN required"}), 403
+    with get_db() as conn:
+        task = conn.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
+        if not task:
+            return jsonify({"error": "Task not found"}), 404
+        if task["name"] == "Not Listed":
+            return jsonify({"error": "'Not Listed' is a required system task and cannot be deleted"}), 403
+        conn.execute("DELETE FROM tasks WHERE id=?", (task_id,))
     return jsonify({"ok": True})
 
 
