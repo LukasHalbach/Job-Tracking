@@ -167,6 +167,7 @@
         <button class="tab active" data-tab="jobs">Jobs / Invoices</button>
         <button class="tab" data-tab="tasks">Tasks</button>
         <button class="tab" data-tab="employees">Employees</button>
+        <button class="tab" data-tab="roles">Roles</button>
         <button class="tab" data-tab="export">Export Data</button>
       </div>
 
@@ -209,12 +210,24 @@
         <div class="add-form">
           <input type="text" id="new-emp-name" placeholder="Full name" />
           <input type="text" id="new-emp-pin" placeholder="PIN (digits)" inputmode="numeric" />
+          <select id="new-emp-role">
+            <option value="">— No role (all tasks) —</option>
+          </select>
           <label class="checkbox-label">
             <input type="checkbox" id="new-emp-admin" /> Admin
           </label>
           <button class="btn btn-primary" id="add-emp-btn">Add Employee</button>
         </div>
         <div class="admin-list" id="employees-list"></div>
+      </div>
+
+      <!-- Roles tab -->
+      <div class="tab-content" id="tab-roles">
+        <div class="add-form">
+          <input type="text" id="new-role-name" placeholder="Role name" />
+          <button class="btn btn-primary" id="add-role-btn">Add Role</button>
+        </div>
+        <div class="admin-list" id="roles-list"></div>
       </div>
 
       <!-- Export tab -->

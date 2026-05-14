@@ -8,7 +8,15 @@ const state = {
   tasks: [],
   entries: [],
   selectedJobs: [],
+  allowedTaskIds: null, // null = all tasks visible
 };
+
+function getVisibleTasks() {
+  if (!state.allowedTaskIds) return state.tasks;
+  return state.tasks.filter(t =>
+    state.allowedTaskIds.includes(t.id) || t.name === 'Not Listed'
+  );
+}
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
 const $ = id => document.getElementById(id);
@@ -215,7 +223,7 @@ function initCombos() {
   taskCombo = makeCombo({
     inputId: 'task-input',
     listId:  'task-list',
-    items:   state.tasks,
+    items:   getVisibleTasks(),
     getLabel: t => t.name,
     getSub:   t => t.category,
     clearOnFocus: true,
@@ -240,7 +248,7 @@ function initCombos() {
   editTaskCombo = makeCombo({
     inputId: 'edit-task-input',
     listId:  'edit-task-list',
-    items:   state.tasks,
+    items:   getVisibleTasks(),
     getLabel: t => t.name,
     getSub:   t => t.category,
     clearOnFocus: true,
@@ -277,10 +285,11 @@ $('login-btn').addEventListener('click', async () => {
   if (!pin)   { showMsg($('login-error'), 'Please enter your PIN.'); return; }
   try {
     const res = await api('POST', '/api/auth', { employee_id: empId, pin });
-    state.employeeId   = empId;
-    state.employeeName = res.name;
-    state.pin          = pin;
-    state.isAdmin      = res.is_admin;
+    state.employeeId    = empId;
+    state.employeeName  = res.name;
+    state.pin           = pin;
+    state.isAdmin       = res.is_admin;
+    state.allowedTaskIds = res.allowed_task_ids || null;
     hideOverlay('pin-overlay');
     $('app').classList.remove('hidden');
     $('header-name').textContent = res.name;
@@ -379,7 +388,7 @@ async function loadTasks() {
   if (taskCombo) {
     taskCombo = makeCombo({
       inputId: 'task-input', listId: 'task-list',
-      items: state.tasks, getLabel: t => t.name, getSub: t => t.category,
+      items: getVisibleTasks(), getLabel: t => t.name, getSub: t => t.category,
       clearOnFocus: true,
       onSelect: t => {
         $('task-input').value = t.name;
@@ -389,7 +398,7 @@ async function loadTasks() {
     });
     editTaskCombo = makeCombo({
       inputId: 'edit-task-input', listId: 'edit-task-list',
-      items: state.tasks, getLabel: t => t.name, getSub: t => t.category,
+      items: getVisibleTasks(), getLabel: t => t.name, getSub: t => t.category,
       clearOnFocus: true,
       onSelect: t => {
         $('edit-task-input').value = t.name;
@@ -592,7 +601,7 @@ $('admin-btn').addEventListener('click', async () => {
   $('export-from').value = from;
   $('export-to').value   = to;
   showOverlay('admin-overlay');
-  await Promise.all([loadAdminJobs(), loadAdminTasks(), loadAdminEmployees()]);
+  await Promise.all([loadAdminJobs(), loadAdminTasks(), loadAdminEmployees(), loadAdminRoles()]);
 });
 
 $('export-this-week-btn').addEventListener('click', () => {
@@ -640,6 +649,8 @@ $('delete-confirm-ok').addEventListener('click', async () => {
     hideOverlay('delete-confirm-overlay');
     if (deleteTarget.type === 'job') {
       await Promise.all([loadAdminJobs(), loadJobs()]);
+    } else if (deleteTarget.type === 'role') {
+      await Promise.all([loadAdminRoles(), loadAdminEmployees()]);
     } else {
       await Promise.all([loadAdminTasks(), loadTasks()]);
     }
@@ -872,18 +883,38 @@ $('add-task-btn').addEventListener('click', async () => {
 
 /* ── Admin: Employees ────────────────────────────────────────────────────── */
 async function loadAdminEmployees() {
-  const emps = await api(
-    'GET',
-    `/api/admin/employees?employee_id=${state.employeeId}&pin=${encodeURIComponent(state.pin)}`
-  );
+  const [emps, roles] = await Promise.all([
+    api('GET', `/api/admin/employees?employee_id=${state.employeeId}&pin=${encodeURIComponent(state.pin)}`),
+    api('GET', '/api/roles'),
+  ]);
+
+  // Populate the new-employee role dropdown
+  const newEmpRole = $('new-emp-role');
+  const prevNewRole = newEmpRole.value;
+  newEmpRole.innerHTML = '<option value="">— No role (all tasks) —</option>';
+  roles.forEach(r => {
+    const opt = document.createElement('option');
+    opt.value = r.id;
+    opt.textContent = r.name;
+    newEmpRole.appendChild(opt);
+  });
+  newEmpRole.value = prevNewRole;
+
   const list = $('employees-list');
   list.innerHTML = '';
   emps.forEach(e => {
+    const roleOpts = roles.map(r =>
+      `<option value="${r.id}" ${e.role_id === r.id ? 'selected' : ''}>${r.name}</option>`
+    ).join('');
     const div = document.createElement('div');
     div.className = `admin-item ${e.active ? '' : 'inactive'}`;
     div.innerHTML = `
       <span class="item-name">${e.name}</span>
       <span class="item-meta">${e.is_admin ? 'Admin' : 'Employee'}</span>
+      <select class="role-select emp-role-select" data-id="${e.id}">
+        <option value="" ${!e.role_id ? 'selected' : ''}>No role</option>
+        ${roleOpts}
+      </select>
       <div class="item-actions">
         <button class="reset-pin-btn btn btn-sm btn-secondary" data-id="${e.id}" data-name="${e.name}">
           Reset PIN
@@ -896,6 +927,17 @@ async function loadAdminEmployees() {
     list.appendChild(div);
   });
 
+  list.querySelectorAll('.emp-role-select').forEach(sel => {
+    sel.addEventListener('change', async () => {
+      const emp = emps.find(e => e.id === parseInt(sel.dataset.id));
+      await api('PUT', `/api/admin/employees/${emp.id}`, {
+        employee_id: state.employeeId, pin: state.pin,
+        name: emp.name, is_admin: emp.is_admin,
+        active: emp.active, role_id: sel.value || null,
+      });
+    });
+  });
+
   list.querySelectorAll('.reset-pin-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
       const newPin = prompt(`Enter new PIN for ${btn.dataset.name}:`);
@@ -904,7 +946,7 @@ async function loadAdminEmployees() {
       await api('PUT', `/api/admin/employees/${emp.id}`, {
         employee_id: state.employeeId, pin: state.pin,
         name: emp.name, is_admin: emp.is_admin,
-        active: emp.active, new_pin: newPin,
+        active: emp.active, role_id: emp.role_id || null, new_pin: newPin,
       });
       alert('PIN updated.');
     });
@@ -916,7 +958,7 @@ async function loadAdminEmployees() {
       await api('PUT', `/api/admin/employees/${emp.id}`, {
         employee_id: state.employeeId, pin: state.pin,
         name: emp.name, is_admin: emp.is_admin,
-        active: emp.active ? 0 : 1,
+        active: emp.active ? 0 : 1, role_id: emp.role_id || null,
       });
       await loadAdminEmployees();
     });
@@ -924,18 +966,168 @@ async function loadAdminEmployees() {
 }
 
 $('add-emp-btn').addEventListener('click', async () => {
-  const name  = $('new-emp-name').value.trim();
-  const pin   = $('new-emp-pin').value.trim();
-  const admin = $('new-emp-admin').checked ? 1 : 0;
+  const name    = $('new-emp-name').value.trim();
+  const pin     = $('new-emp-pin').value.trim();
+  const admin   = $('new-emp-admin').checked ? 1 : 0;
+  const role_id = $('new-emp-role').value || null;
   if (!name || !pin) { alert('Name and PIN are required.'); return; }
   await api('POST', '/api/admin/employees', {
     employee_id: state.employeeId, pin: state.pin,
-    name, new_pin: pin, is_admin: admin,
+    name, new_pin: pin, is_admin: admin, role_id,
   });
   $('new-emp-name').value = '';
   $('new-emp-pin').value = '';
   $('new-emp-admin').checked = false;
+  $('new-emp-role').value = '';
   await Promise.all([loadAdminEmployees(), loadEmployeeList()]);
+});
+
+/* ── Admin: Roles ────────────────────────────────────────────────────────── */
+async function loadAdminRoles() {
+  const roles = await api('GET', '/api/roles');
+  const list = $('roles-list');
+  list.innerHTML = '';
+
+  if (!roles.length) {
+    list.innerHTML = '<p style="color:var(--gray-400);font-size:.85rem;padding:.5rem 0">No roles yet. Add one above.</p>';
+  }
+
+  roles.forEach(role => {
+    const div = document.createElement('div');
+    div.className = 'admin-item';
+    div.dataset.roleId = role.id;
+    div.innerHTML = `
+      <span class="item-name">${role.name}</span>
+      <div class="item-actions">
+        <button class="edit-tasks-btn btn btn-sm btn-outline" data-id="${role.id}" data-name="${role.name}">
+          Edit Tasks
+        </button>
+        <button class="edit-item-btn btn btn-sm btn-secondary" data-id="${role.id}" data-name="${role.name}">
+          Rename
+        </button>
+        <button class="delete-perm-btn btn btn-sm btn-danger"
+                data-id="${role.id}" data-label="${role.name}">
+          Delete
+        </button>
+      </div>`;
+    list.appendChild(div);
+  });
+
+  list.querySelectorAll('.edit-tasks-btn').forEach(btn => {
+    btn.addEventListener('click', () => openRoleTasksPanel(parseInt(btn.dataset.id), btn.dataset.name, btn));
+  });
+
+  list.querySelectorAll('.edit-item-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const role = roles.find(r => r.id === parseInt(btn.dataset.id));
+      const div = btn.closest('.admin-item');
+      div.innerHTML = `
+        <input class="edit-inline-input" value="${role.name}" placeholder="Role name" style="flex:1" />
+        <div class="item-actions">
+          <button class="btn btn-sm btn-primary save-inline-btn">Save</button>
+          <button class="btn btn-sm btn-secondary cancel-inline-btn">Cancel</button>
+        </div>`;
+      div.querySelector('.save-inline-btn').addEventListener('click', async () => {
+        const newName = div.querySelector('.edit-inline-input').value.trim();
+        if (!newName) { alert('Role name is required.'); return; }
+        await api('PUT', `/api/roles/${role.id}`, {
+          employee_id: state.employeeId, pin: state.pin, name: newName,
+        });
+        await loadAdminRoles();
+      });
+      div.querySelector('.cancel-inline-btn').addEventListener('click', loadAdminRoles);
+    });
+  });
+
+  list.querySelectorAll('.delete-perm-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      openDeleteConfirm(
+        'role', parseInt(btn.dataset.id), btn.dataset.label,
+        'Employees assigned this role will lose their task restriction and see all tasks. This cannot be undone.'
+      );
+    });
+  });
+}
+
+async function openRoleTasksPanel(roleId, roleName, triggerBtn) {
+  // Close any already-open panel
+  document.querySelectorAll('.role-tasks-panel').forEach(p => p.remove());
+
+  const [assignedIds, allTasks] = await Promise.all([
+    api('GET', `/api/roles/${roleId}/tasks`),
+    api('GET', '/api/tasks'),
+  ]);
+
+  const activeTasks = allTasks.filter(t => t.active && t.name !== 'Not Listed');
+
+  // Group by category
+  const byCategory = {};
+  activeTasks.forEach(t => {
+    if (!byCategory[t.category]) byCategory[t.category] = [];
+    byCategory[t.category].push(t);
+  });
+
+  const panel = document.createElement('div');
+  panel.className = 'role-tasks-panel';
+  panel.innerHTML = `
+    <div style="font-size:.85rem;font-weight:600;color:var(--gray-700)">
+      Tasks allowed for <strong>${roleName}</strong>
+      <span class="hint"> — "Not Listed" is always visible to all roles</span>
+    </div>
+    <div class="task-checklist" id="task-checklist-${roleId}"></div>
+    <div class="role-tasks-actions">
+      <button class="btn btn-sm btn-secondary" id="select-all-tasks-${roleId}">Select All</button>
+      <button class="btn btn-sm btn-secondary" id="clear-all-tasks-${roleId}">Clear All</button>
+      <div class="spacer"></div>
+      <button class="btn btn-sm btn-primary" id="save-role-tasks-${roleId}">Save</button>
+      <button class="btn btn-sm btn-secondary" id="cancel-role-tasks-${roleId}">Cancel</button>
+    </div>`;
+
+  const checklist = panel.querySelector(`#task-checklist-${roleId}`);
+  Object.entries(byCategory).sort(([a], [b]) => a.localeCompare(b)).forEach(([cat, tasks]) => {
+    const group = document.createElement('div');
+    group.className = 'task-category-group';
+    group.innerHTML = `<div class="task-category-label">${cat}</div>`;
+    tasks.forEach(t => {
+      const label = document.createElement('label');
+      label.className = 'task-check-label';
+      label.innerHTML = `<input type="checkbox" value="${t.id}" ${assignedIds.includes(t.id) ? 'checked' : ''} /> ${t.name}`;
+      group.appendChild(label);
+    });
+    checklist.appendChild(group);
+  });
+
+  panel.querySelector(`#select-all-tasks-${roleId}`).addEventListener('click', () => {
+    panel.querySelectorAll('input[type=checkbox]').forEach(cb => { cb.checked = true; });
+  });
+  panel.querySelector(`#clear-all-tasks-${roleId}`).addEventListener('click', () => {
+    panel.querySelectorAll('input[type=checkbox]').forEach(cb => { cb.checked = false; });
+  });
+  panel.querySelector(`#save-role-tasks-${roleId}`).addEventListener('click', async () => {
+    const task_ids = [...panel.querySelectorAll('input[type=checkbox]:checked')].map(cb => parseInt(cb.value));
+    await api('PUT', `/api/roles/${roleId}/tasks`, {
+      employee_id: state.employeeId, pin: state.pin, task_ids,
+    });
+    panel.remove();
+    triggerBtn.textContent = 'Edit Tasks';
+  });
+  panel.querySelector(`#cancel-role-tasks-${roleId}`).addEventListener('click', () => {
+    panel.remove();
+    triggerBtn.textContent = 'Edit Tasks';
+  });
+
+  triggerBtn.textContent = 'Close';
+  triggerBtn.closest('.admin-item').insertAdjacentElement('afterend', panel);
+}
+
+$('add-role-btn').addEventListener('click', async () => {
+  const name = $('new-role-name').value.trim();
+  if (!name) { alert('Role name is required.'); return; }
+  await api('POST', '/api/roles', {
+    employee_id: state.employeeId, pin: state.pin, name,
+  });
+  $('new-role-name').value = '';
+  await loadAdminRoles();
 });
 
 /* ── Export ──────────────────────────────────────────────────────────────── */

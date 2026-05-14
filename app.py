@@ -147,6 +147,25 @@ def init_db():
             if name not in canonical:
                 conn.execute("UPDATE tasks SET active=0 WHERE name=?", (name,))
 
+        # Roles tables
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS roles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE
+            );
+            CREATE TABLE IF NOT EXISTS role_tasks (
+                role_id INTEGER NOT NULL,
+                task_id INTEGER NOT NULL,
+                PRIMARY KEY (role_id, task_id),
+                FOREIGN KEY (role_id) REFERENCES roles(id),
+                FOREIGN KEY (task_id) REFERENCES tasks(id)
+            );
+        """)
+        try:
+            conn.execute("ALTER TABLE employees ADD COLUMN role_id INTEGER REFERENCES roles(id)")
+        except Exception:
+            pass
+
         # Seed a default admin if no employees exist
         count = conn.execute("SELECT COUNT(*) FROM employees").fetchone()[0]
         if count == 0:
@@ -196,7 +215,24 @@ def auth():
     data = request.json
     emp = verify_employee(data.get("employee_id"), str(data.get("pin", "")))
     if emp:
-        return jsonify({"ok": True, "name": emp["name"], "is_admin": bool(emp["is_admin"])})
+        allowed_task_ids = None
+        if not emp["is_admin"] and emp.get("role_id"):
+            with get_db() as conn:
+                task_rows = conn.execute(
+                    "SELECT task_id FROM role_tasks WHERE role_id=?", (emp["role_id"],)
+                ).fetchall()
+                not_listed = conn.execute(
+                    "SELECT id FROM tasks WHERE name='Not Listed'"
+                ).fetchone()
+                allowed_task_ids = [r["task_id"] for r in task_rows]
+                if not_listed and not_listed["id"] not in allowed_task_ids:
+                    allowed_task_ids.append(not_listed["id"])
+        return jsonify({
+            "ok": True,
+            "name": emp["name"],
+            "is_admin": bool(emp["is_admin"]),
+            "allowed_task_ids": allowed_task_ids,
+        })
     return jsonify({"ok": False}), 401
 
 
@@ -537,7 +573,11 @@ def admin_list_employees():
         return jsonify({"error": "Unauthorized"}), 403
     with get_db() as conn:
         rows = conn.execute(
-            "SELECT id, name, is_admin, active FROM employees ORDER BY name"
+            """SELECT e.id, e.name, e.is_admin, e.active, e.role_id,
+                      r.name as role_name
+               FROM employees e
+               LEFT JOIN roles r ON e.role_id = r.id
+               ORDER BY e.name"""
         ).fetchall()
     return jsonify([dict(r) for r in rows])
 
@@ -551,10 +591,11 @@ def admin_add_employee():
     pin = str(data.get("new_pin") or "").strip()
     if not name or not pin:
         return jsonify({"error": "Name and PIN required"}), 400
+    role_id = data.get("role_id") or None
     with get_db() as conn:
         cur = conn.execute(
-            "INSERT INTO employees (name, pin_hash, is_admin) VALUES (?, ?, ?)",
-            (name, hash_pin(pin), int(data.get("is_admin", 0))),
+            "INSERT INTO employees (name, pin_hash, is_admin, role_id) VALUES (?, ?, ?, ?)",
+            (name, hash_pin(pin), int(data.get("is_admin", 0)), role_id),
         )
     return jsonify({"id": cur.lastrowid, "name": name}), 201
 
@@ -564,18 +605,19 @@ def admin_update_employee(emp_id):
     data = request.json
     if not verify_admin(data.get("employee_id"), str(data.get("pin", ""))):
         return jsonify({"error": "Unauthorized"}), 403
+    role_id = data.get("role_id") or None
     with get_db() as conn:
         if data.get("new_pin"):
             conn.execute(
-                "UPDATE employees SET name=?, pin_hash=?, is_admin=?, active=? WHERE id=?",
+                "UPDATE employees SET name=?, pin_hash=?, is_admin=?, active=?, role_id=? WHERE id=?",
                 (data["name"], hash_pin(str(data["new_pin"])),
-                 int(data.get("is_admin", 0)), int(data.get("active", 1)), emp_id),
+                 int(data.get("is_admin", 0)), int(data.get("active", 1)), role_id, emp_id),
             )
         else:
             conn.execute(
-                "UPDATE employees SET name=?, is_admin=?, active=? WHERE id=?",
+                "UPDATE employees SET name=?, is_admin=?, active=?, role_id=? WHERE id=?",
                 (data["name"], int(data.get("is_admin", 0)),
-                 int(data.get("active", 1)), emp_id),
+                 int(data.get("active", 1)), role_id, emp_id),
             )
     return jsonify({"ok": True})
 
@@ -592,6 +634,78 @@ def change_pin(emp_id):
     with get_db() as conn:
         conn.execute("UPDATE employees SET pin_hash=? WHERE id=?",
                      (hash_pin(new_pin), emp_id))
+    return jsonify({"ok": True})
+
+
+# ── Roles ────────────────────────────────────────────────────────────────────
+
+@app.route("/api/roles", methods=["GET"])
+def list_roles():
+    with get_db() as conn:
+        rows = conn.execute("SELECT * FROM roles ORDER BY name").fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/api/roles", methods=["POST"])
+def add_role():
+    data = request.json
+    if not verify_admin(data.get("employee_id"), str(data.get("pin", ""))):
+        return jsonify({"error": "Unauthorized"}), 403
+    name = (data.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "Role name required"}), 400
+    with get_db() as conn:
+        cur = conn.execute("INSERT INTO roles (name) VALUES (?)", (name,))
+        return jsonify({"id": cur.lastrowid, "name": name}), 201
+
+
+@app.route("/api/roles/<int:role_id>", methods=["PUT"])
+def update_role(role_id):
+    data = request.json
+    if not verify_admin(data.get("employee_id"), str(data.get("pin", ""))):
+        return jsonify({"error": "Unauthorized"}), 403
+    name = (data.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "Role name required"}), 400
+    with get_db() as conn:
+        conn.execute("UPDATE roles SET name=? WHERE id=?", (name, role_id))
+    return jsonify({"ok": True})
+
+
+@app.route("/api/roles/<int:role_id>", methods=["DELETE"])
+def delete_role(role_id):
+    data = request.json
+    if not verify_admin(data.get("employee_id"), str(data.get("pin", ""))):
+        return jsonify({"error": "Unauthorized — admin PIN required"}), 403
+    with get_db() as conn:
+        conn.execute("UPDATE employees SET role_id=NULL WHERE role_id=?", (role_id,))
+        conn.execute("DELETE FROM role_tasks WHERE role_id=?", (role_id,))
+        conn.execute("DELETE FROM roles WHERE id=?", (role_id,))
+    return jsonify({"ok": True})
+
+
+@app.route("/api/roles/<int:role_id>/tasks", methods=["GET"])
+def get_role_tasks(role_id):
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT task_id FROM role_tasks WHERE role_id=?", (role_id,)
+        ).fetchall()
+    return jsonify([r["task_id"] for r in rows])
+
+
+@app.route("/api/roles/<int:role_id>/tasks", methods=["PUT"])
+def set_role_tasks(role_id):
+    data = request.json
+    if not verify_admin(data.get("employee_id"), str(data.get("pin", ""))):
+        return jsonify({"error": "Unauthorized"}), 403
+    task_ids = data.get("task_ids", [])
+    with get_db() as conn:
+        conn.execute("DELETE FROM role_tasks WHERE role_id=?", (role_id,))
+        for tid in task_ids:
+            conn.execute(
+                "INSERT OR IGNORE INTO role_tasks (role_id, task_id) VALUES (?, ?)",
+                (role_id, int(tid)),
+            )
     return jsonify({"ok": True})
 
 
