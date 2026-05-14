@@ -228,9 +228,10 @@
             <label>Date To</label>
             <input type="date" id="export-to" />
           </div>
+          <button class="btn btn-outline btn-sm" id="export-this-week-btn" style="align-self:flex-end">This Week</button>
           <button class="btn btn-primary" id="export-btn">Download Excel</button>
         </div>
-        <p class="hint-block">Exports all employee entries for the selected date range. Leave blank to export everything.</p>
+        <p class="hint-block">Defaults to the current week. Adjust the dates for a custom range, or leave both blank to export everything.</p>
       </div>
     </div>
   </div>
@@ -340,7 +341,10 @@
       <div class="entries-header">
         <h3 class="card-title">Recent Entries</h3>
         <div class="entries-controls">
-          <input type="date" id="filter-date" title="Filter by date" />
+          <input type="date" id="filter-from" title="From date" />
+          <span class="range-sep">–</span>
+          <input type="date" id="filter-to" title="To date" />
+          <button class="btn btn-sm btn-outline" id="this-week-btn">This Week</button>
           <button class="btn btn-sm btn-outline" id="refresh-btn">Refresh</button>
         </div>
       </div>
