@@ -90,6 +90,8 @@ function makeCombo({
   let savedValue = '';
   let didSelect = false;
   const searchFn = getSearch || (i => getLabel(i));
+  const controller = new AbortController();
+  const sig = { signal: controller.signal };
 
   function render(filter) {
     const q = filter.toLowerCase();
@@ -123,7 +125,7 @@ function makeCombo({
     list.classList.remove('hidden');
   }
 
-  input.addEventListener('input', () => render(input.value));
+  input.addEventListener('input', () => render(input.value), sig);
 
   if (clearOnFocus) {
     input.addEventListener('focus', () => {
@@ -131,9 +133,9 @@ function makeCombo({
       didSelect = false;
       input.value = '';
       render('');
-    });
+    }, sig);
   } else {
-    input.addEventListener('focus', () => render(input.value));
+    input.addEventListener('focus', () => render(input.value), sig);
   }
 
   input.addEventListener('blur', () => {
@@ -145,7 +147,7 @@ function makeCombo({
     if (allowFreeText && input.value.trim()) {
       onSelect({ _free: input.value.trim() });
     }
-  });
+  }, sig);
 
   input.addEventListener('keydown', e => {
     const lis = list.querySelectorAll('li');
@@ -161,9 +163,12 @@ function makeCombo({
     } else { return; }
     lis.forEach((li, i) => li.classList.toggle('active', i === active));
     if (lis[active]) lis[active].scrollIntoView({ block: 'nearest' });
-  });
+  }, sig);
 
-  return { refresh: () => render(input.value) };
+  return {
+    refresh: () => render(input.value),
+    destroy: () => controller.abort(),
+  };
 }
 
 /* ── Combo instances ─────────────────────────────────────────────────────── */
@@ -335,6 +340,8 @@ $('change-pin-save-btn').addEventListener('click', async () => {
 async function loadJobs() {
   state.jobs = await api('GET', '/api/jobs');
   if (jobCombo) {
+    jobCombo.destroy();
+    editJobCombo.destroy();
     jobCombo = makeCombo({
       inputId: 'job-input', listId: 'job-list',
       items: state.jobs, getLabel: j => j.job_number, getSub: j => j.description || '',
@@ -362,6 +369,8 @@ async function loadJobs() {
 async function loadTasks() {
   state.tasks = await api('GET', '/api/tasks');
   if (taskCombo) {
+    taskCombo.destroy();
+    editTaskCombo.destroy();
     taskCombo = makeCombo({
       inputId: 'task-input', listId: 'task-list',
       items: state.tasks, getLabel: t => t.name, getSub: t => t.category,
