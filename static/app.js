@@ -12,7 +12,21 @@ const state = {
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
 const $ = id => document.getElementById(id);
-const today = () => new Date().toISOString().slice(0, 10);
+function toLocalDate(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+const today = () => toLocalDate(new Date());
+
+function getWeekRange() {
+  const now = new Date();
+  const day = now.getDay();
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() + diffToMonday);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  return { from: toLocalDate(monday), to: toLocalDate(sunday) };
+}
 
 function showOverlay(id) {
   document.querySelectorAll('.overlay').forEach(el => el.classList.remove('active'));
@@ -182,6 +196,7 @@ function initCombos() {
     onSelect: j => {
       const label = j._free ?? j.job_number;
       if (label === 'Shop') {
+        if (state.selectedJobs.length > 0) { $('job-input').value = ''; return; }
         state.selectedJobs = [j];
       } else {
         if (state.selectedJobs.some(s => (s._free ?? s.job_number) === 'Shop')) {
@@ -386,9 +401,11 @@ async function loadTasks() {
 }
 
 async function loadEntries() {
-  const dateFilter = $('filter-date').value;
+  const from = $('filter-from').value;
+  const to   = $('filter-to').value;
   let url = `/api/entries?employee_id=${state.employeeId}`;
-  if (dateFilter) url += `&date_from=${dateFilter}&date_to=${dateFilter}`;
+  if (from) url += `&date_from=${from}`;
+  if (to)   url += `&date_to=${to}`;
   state.entries = await api('GET', url);
   renderEntries();
 }
@@ -493,7 +510,11 @@ function renderEntries() {
 
 function round2(n) { return Math.round(n * 100) / 100; }
 
-$('filter-date').addEventListener('change', loadEntries);
+$('this-week-btn').addEventListener('click', () => {
+  const { from, to } = getWeekRange();
+  $('filter-from').value = from;
+  $('filter-to').value   = to;
+});
 $('refresh-btn').addEventListener('click', loadEntries);
 
 /* ── Edit modal ──────────────────────────────────────────────────────────── */
@@ -567,8 +588,17 @@ $('edit-delete-btn').addEventListener('click', async () => {
 
 /* ── Admin ───────────────────────────────────────────────────────────────── */
 $('admin-btn').addEventListener('click', async () => {
+  const { from, to } = getWeekRange();
+  $('export-from').value = from;
+  $('export-to').value   = to;
   showOverlay('admin-overlay');
   await Promise.all([loadAdminJobs(), loadAdminTasks(), loadAdminEmployees()]);
+});
+
+$('export-this-week-btn').addEventListener('click', () => {
+  const { from, to } = getWeekRange();
+  $('export-from').value = from;
+  $('export-to').value   = to;
 });
 $('admin-close-btn').addEventListener('click', () => hideOverlay('admin-overlay'));
 
@@ -922,7 +952,9 @@ $('export-btn').addEventListener('click', () => {
 async function init() {
   await loadEmployeeList();
   showOverlay('pin-overlay');
-  $('entry-date').value = today();
+  $('entry-date').value  = today();
+  $('filter-from').value = today();
+  $('filter-to').value   = today();
   buildQuickHours('quick-hours', 'hours');
   buildQuickHours('edit-quick-hours', 'edit-hours');
   initCombos();

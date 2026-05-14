@@ -532,7 +532,8 @@ body {
   gap: .75rem;
   flex-wrap: wrap;
 }
-.entries-controls { display: flex; gap: .5rem; align-items: center; }
+.entries-controls { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+.range-sep { color: var(--gray-400); font-size: .9rem; }
 
 #entries-table-wrap {
   overflow-x: auto;
