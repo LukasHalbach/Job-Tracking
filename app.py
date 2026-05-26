@@ -468,11 +468,13 @@ def add_entry():
     entry_date = data.get("entry_date") or date.today().isoformat()
 
     with get_db() as conn:
-        # Resolve job_id
+        # Job must exist in the active jobs list
         job_row = conn.execute(
-            "SELECT id FROM jobs WHERE job_number=?", (job_number,)
+            "SELECT id FROM jobs WHERE job_number=? AND active=1", (job_number,)
         ).fetchone()
-        job_id = job_row["id"] if job_row else None
+        if not job_row:
+            return jsonify({"error": f"'{job_number}' is not on the job list. Please select a job from the dropdown."}), 400
+        job_id = job_row["id"]
 
         # Resolve task_id
         task_row = conn.execute(
@@ -517,9 +519,11 @@ def update_entry(entry_id):
         hours = float(data.get("hours") or 0)
 
         job_row = conn.execute(
-            "SELECT id FROM jobs WHERE job_number=?", (job_number,)
+            "SELECT id FROM jobs WHERE job_number=? AND active=1", (job_number,)
         ).fetchone()
-        job_id = job_row["id"] if job_row else None
+        if not job_row:
+            return jsonify({"error": f"'{job_number}' is not on the job list. Please select a job from the dropdown."}), 400
+        job_id = job_row["id"]
 
         task_row = conn.execute(
             "SELECT id FROM tasks WHERE name=?", (task_name,)
