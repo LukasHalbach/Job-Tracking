@@ -167,6 +167,7 @@
         <button class="tab active" data-tab="jobs">Jobs / Invoices</button>
         <button class="tab" data-tab="tasks">Tasks</button>
         <button class="tab" data-tab="employees">Employees</button>
+        <button class="tab" data-tab="roles">Roles</button>
         <button class="tab" data-tab="export">Export Data</button>
       </div>
 
@@ -209,12 +210,24 @@
         <div class="add-form">
           <input type="text" id="new-emp-name" placeholder="Full name" />
           <input type="text" id="new-emp-pin" placeholder="PIN (digits)" inputmode="numeric" />
+          <select id="new-emp-role">
+            <option value="">— No role (all tasks) —</option>
+          </select>
           <label class="checkbox-label">
             <input type="checkbox" id="new-emp-admin" /> Admin
           </label>
           <button class="btn btn-primary" id="add-emp-btn">Add Employee</button>
         </div>
         <div class="admin-list" id="employees-list"></div>
+      </div>
+
+      <!-- Roles tab -->
+      <div class="tab-content" id="tab-roles">
+        <div class="add-form">
+          <input type="text" id="new-role-name" placeholder="Role name" />
+          <button class="btn btn-primary" id="add-role-btn">Add Role</button>
+        </div>
+        <div class="admin-list" id="roles-list"></div>
       </div>
 
       <!-- Export tab -->
@@ -228,9 +241,10 @@
             <label>Date To</label>
             <input type="date" id="export-to" />
           </div>
+          <button class="btn btn-outline btn-sm" id="export-this-week-btn" style="align-self:flex-end">This Week</button>
           <button class="btn btn-primary" id="export-btn">Download Excel</button>
         </div>
-        <p class="hint-block">Exports all employee entries for the selected date range. Leave blank to export everything.</p>
+        <p class="hint-block">Defaults to the current week. Adjust the dates for a custom range, or leave both blank to export everything.</p>
       </div>
     </div>
   </div>
@@ -340,7 +354,10 @@
       <div class="entries-header">
         <h3 class="card-title">Recent Entries</h3>
         <div class="entries-controls">
-          <input type="date" id="filter-date" title="Filter by date" />
+          <input type="date" id="filter-from" title="From date" />
+          <span class="range-sep">–</span>
+          <input type="date" id="filter-to" title="To date" />
+          <button class="btn btn-sm btn-outline" id="this-week-btn">This Week</button>
           <button class="btn btn-sm btn-outline" id="refresh-btn">Refresh</button>
         </div>
       </div>

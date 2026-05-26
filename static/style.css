@@ -532,7 +532,8 @@ body {
   gap: .75rem;
   flex-wrap: wrap;
 }
-.entries-controls { display: flex; gap: .5rem; align-items: center; }
+.entries-controls { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+.range-sep { color: var(--gray-400); font-size: .9rem; }
 
 #entries-table-wrap {
   overflow-x: auto;
@@ -709,6 +710,67 @@ body {
   cursor: pointer;
   white-space: nowrap;
 }
+
+/* ── Role task panel ──────────────────────────────────────────────────────── */
+.role-tasks-panel {
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+  padding: 1rem;
+  margin: .35rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+}
+.task-checklist {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: .5rem 1.25rem;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.task-category-group {
+  display: flex;
+  flex-direction: column;
+  gap: .2rem;
+}
+.task-category-label {
+  font-size: .72rem;
+  font-weight: 700;
+  color: var(--gray-500);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  border-bottom: 1px solid var(--gray-200);
+  padding-bottom: .2rem;
+  margin-bottom: .1rem;
+}
+.task-check-label {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  font-size: .84rem;
+  color: var(--gray-700);
+  cursor: pointer;
+}
+.task-check-label:hover { color: var(--gray-900); }
+.role-tasks-actions {
+  display: flex;
+  gap: .5rem;
+  align-items: center;
+  padding-top: .5rem;
+  border-top: 1px solid var(--gray-200);
+}
+.role-select {
+  padding: .25rem .5rem;
+  border: 1.5px solid var(--gray-300);
+  border-radius: var(--radius);
+  font-size: .82rem;
+  font-family: var(--font);
+  color: var(--gray-700);
+  background: #fff;
+  cursor: pointer;
+}
+.role-select:focus { outline: none; border-color: var(--blue); }
 
 /* ── Export Form ──────────────────────────────────────────────────────────── */
 .export-form {
