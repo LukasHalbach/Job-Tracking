@@ -61,7 +61,7 @@ function renderJobTags() {
   state.selectedJobs.forEach((j, idx) => {
     const tag = document.createElement('span');
     tag.className = 'job-tag';
-    tag.textContent = j._free ?? j.job_number;
+    tag.textContent = j.job_number;
     const rm = document.createElement('button');
     rm.type = 'button';
     rm.textContent = '✕';
@@ -72,7 +72,7 @@ function renderJobTags() {
     tag.appendChild(rm);
     field.insertBefore(tag, input);
   });
-  const hasShop = state.selectedJobs.some(j => (j._free ?? j.job_number) === 'Shop');
+  const hasShop = state.selectedJobs.some(j => j.job_number === 'Shop');
   input.style.display = hasShop ? 'none' : '';
   $('split-job-wrap').style.display = state.selectedJobs.length >= 2 ? '' : 'none';
 }
@@ -177,18 +177,14 @@ function initCombos() {
     getLabel: j => j.job_number,
     getSub:   j => j.description || '',
     getSearch: j => `${j.job_number} ${j.description || ''}`,
-    allowFreeText: true,
+    clearOnFocus: true,
     setInputOnSelect: false,
     onSelect: j => {
-      const label = j._free ?? j.job_number;
-      if (label === 'Shop') {
+      if (j.job_number === 'Shop') {
         state.selectedJobs = [j];
       } else {
-        if (state.selectedJobs.some(s => (s._free ?? s.job_number) === 'Shop')) {
-          $('job-input').value = '';
-          return;
-        }
-        if (!state.selectedJobs.find(s => (s._free ?? s.job_number) === label)) {
+        if (state.selectedJobs.some(s => s.job_number === 'Shop')) return;
+        if (!state.selectedJobs.find(s => s.job_number === j.job_number)) {
           state.selectedJobs.push(j);
         }
       }
@@ -218,8 +214,7 @@ function initCombos() {
     getLabel: j => j.job_number,
     getSub:   j => j.description || '',
     getSearch: j => `${j.job_number} ${j.description || ''}`,
-    allowFreeText: true,
-    onSelect: j => { $('edit-job-input').value = j._free ?? j.job_number; },
+    onSelect: j => { $('edit-job-input').value = j.job_number; },
   });
 
   editTaskCombo = makeCombo({
@@ -339,13 +334,17 @@ async function loadJobs() {
       inputId: 'job-input', listId: 'job-list',
       items: state.jobs, getLabel: j => j.job_number, getSub: j => j.description || '',
       getSearch: j => `${j.job_number} ${j.description || ''}`,
-      allowFreeText: true, setInputOnSelect: false,
+      clearOnFocus: true, setInputOnSelect: false,
       onSelect: j => {
-        const label = j._free ?? j.job_number;
-        if (!state.selectedJobs.find(s => (s._free ?? s.job_number) === label)) {
-          state.selectedJobs.push(j);
-          renderJobTags();
+        if (j.job_number === 'Shop') {
+          state.selectedJobs = [j];
+        } else {
+          if (state.selectedJobs.some(s => s.job_number === 'Shop')) return;
+          if (!state.selectedJobs.find(s => s.job_number === j.job_number)) {
+            state.selectedJobs.push(j);
+          }
         }
+        renderJobTags();
         $('job-input').value = '';
       },
     });
@@ -353,8 +352,7 @@ async function loadJobs() {
       inputId: 'edit-job-input', listId: 'edit-job-list',
       items: state.jobs, getLabel: j => j.job_number, getSub: j => j.description || '',
       getSearch: j => `${j.job_number} ${j.description || ''}`,
-      allowFreeText: true,
-      onSelect: j => { $('edit-job-input').value = j._free ?? j.job_number; },
+      onSelect: j => { $('edit-job-input').value = j.job_number; },
     });
   }
 }
@@ -437,7 +435,7 @@ $('submit-btn').addEventListener('click', async () => {
         employee_id: state.employeeId,
         pin: state.pin,
         entry_date: entryDate,
-        job_number: j._free ?? j.job_number,
+        job_number: j.job_number,
         task_name:  taskName,
         category,
         hours: jobHours,
