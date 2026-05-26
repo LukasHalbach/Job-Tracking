@@ -97,6 +97,15 @@ function renderJobTags() {
   const hasShop = state.selectedJobs.some(j => j.job_number === 'Shop');
   input.style.display = hasShop ? 'none' : '';
   $('split-job-wrap').style.display = state.selectedJobs.length >= 2 ? '' : 'none';
+
+  // Require description when "Not Listed" job is selected
+  const hasNotListed = state.selectedJobs.some(j => j.job_number === 'Not Listed');
+  const descLabel = document.querySelector('label[for="description"]');
+  if (descLabel) {
+    descLabel.innerHTML = hasNotListed
+      ? 'Description <span class="required">*</span> <span class="hint">(required — note the actual invoice/job name)</span>'
+      : 'Description <span class="hint">(optional)</span>';
+  }
 }
 
 /* ── Combobox factory ────────────────────────────────────────────────────── */
@@ -457,11 +466,13 @@ $('submit-btn').addEventListener('click', async () => {
   const entryDate = $('entry-date').value;
   const split     = $('split-job').checked;
 
-  if (!state.selectedJobs.length) { showMsg(err, 'Please enter a Job / Invoice number.'); return; }
+  if (!state.selectedJobs.length) { showMsg(err, 'Please select a Job / Invoice from the list.'); return; }
   if (!taskName)  { showMsg(err, 'Please select a task.'); return; }
   if (!category)  { showMsg(err, 'Category could not be determined. Please re-select the task.'); return; }
   if (!hours || hours <= 0) { showMsg(err, 'Please enter a valid number of hours.'); return; }
   if (taskName === 'Not Listed' && !notes) { showMsg(err, 'Please describe the task in the Notes field.'); return; }
+  const hasNotListedJob = state.selectedJobs.some(j => j.job_number === 'Not Listed');
+  if (hasNotListedJob && !desc) { showMsg(err, 'Please enter a description to identify the actual invoice/job.'); return; }
 
   const jobHours = split ? round2(hours / state.selectedJobs.length) : hours;
 

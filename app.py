@@ -132,6 +132,15 @@ def init_db():
         else:
             conn.execute("UPDATE jobs SET is_system=1 WHERE job_number='Shop'")
 
+        # Seed the protected "Not Listed" system job
+        not_listed = conn.execute("SELECT id FROM jobs WHERE job_number='Not Listed'").fetchone()
+        if not not_listed:
+            conn.execute(
+                "INSERT INTO jobs (job_number, description, is_system) VALUES ('Not Listed', 'Invoice not yet in system', 1)"
+            )
+        else:
+            conn.execute("UPDATE jobs SET is_system=1 WHERE job_number='Not Listed'")
+
         # Sync tasks — add new, reactivate returning, deactivate removed
         canonical = {name: category for name, category in TASKS}
         existing  = {row["name"]: row for row in
