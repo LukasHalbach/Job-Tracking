@@ -731,25 +731,18 @@ def admin_flagged_entries():
         return jsonify({"error": "Unauthorized"}), 403
 
     with get_db() as conn:
-        # Entries whose job_number no longer exists as an active job,
-        # OR whose task_name no longer exists in the system at all.
-        # Deactivated jobs/tasks do NOT flag old entries — only hard-deleted ones do.
-        # "Not Listed" job/task are intentional placeholders — excluded.
+        # Entries where the employee selected "Not Listed" for job or task,
+        # meaning they couldn't identify the real invoice/task at the time.
         rows = conn.execute("""
             SELECT te.id, te.entry_date, te.job_number, te.task_name,
                    te.category, te.hours, te.description, te.notes,
                    e.name AS employee_name,
-                   CASE WHEN j.id IS NULL THEN 1 ELSE 0 END AS bad_job,
-                   CASE WHEN t.id IS NULL THEN 1 ELSE 0 END AS bad_task
+                   CASE WHEN te.job_number  = 'Not Listed' THEN 1 ELSE 0 END AS bad_job,
+                   CASE WHEN te.task_name   = 'Not Listed' THEN 1 ELSE 0 END AS bad_task
             FROM time_entries te
             JOIN employees e ON te.employee_id = e.id
-            LEFT JOIN jobs j
-                   ON j.job_number = te.job_number
-            LEFT JOIN tasks t
-                   ON t.name = te.task_name
-            WHERE te.job_number != 'Not Listed'
-              AND te.task_name  != 'Not Listed'
-              AND (j.id IS NULL OR t.id IS NULL)
+            WHERE te.job_number = 'Not Listed'
+               OR te.task_name  = 'Not Listed'
             ORDER BY te.entry_date DESC, te.id DESC
             LIMIT 500
         """).fetchall()
