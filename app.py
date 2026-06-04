@@ -732,7 +732,8 @@ def admin_flagged_entries():
 
     with get_db() as conn:
         # Entries whose job_number no longer exists as an active job,
-        # OR whose task_name no longer exists as an active task.
+        # OR whose task_name no longer exists in the system at all.
+        # Deactivated jobs/tasks do NOT flag old entries — only hard-deleted ones do.
         # "Not Listed" job/task are intentional placeholders — excluded.
         rows = conn.execute("""
             SELECT te.id, te.entry_date, te.job_number, te.task_name,
@@ -743,9 +744,9 @@ def admin_flagged_entries():
             FROM time_entries te
             JOIN employees e ON te.employee_id = e.id
             LEFT JOIN jobs j
-                   ON j.job_number = te.job_number AND j.active = 1
+                   ON j.job_number = te.job_number
             LEFT JOIN tasks t
-                   ON t.name = te.task_name AND t.active = 1
+                   ON t.name = te.task_name
             WHERE te.job_number != 'Not Listed'
               AND te.task_name  != 'Not Listed'
               AND (j.id IS NULL OR t.id IS NULL)
