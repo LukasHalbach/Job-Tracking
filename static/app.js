@@ -1149,6 +1149,106 @@ $('add-role-btn').addEventListener('click', async () => {
   await loadAdminRoles();
 });
 
+/* ── Admin: Flagged Entries ──────────────────────────────────────────────── */
+async function loadFlaggedEntries() {
+  const countEl = $('flagged-count');
+  const list    = $('flagged-list');
+  list.innerHTML = '';
+  countEl.textContent = 'Loading…';
+
+  let data;
+  try {
+    data = await api('GET', `/api/admin/flagged-entries?employee_id=${state.employeeId}&pin=${encodeURIComponent(state.pin)}`);
+  } catch (e) {
+    countEl.textContent = 'Error: ' + e.message;
+    return;
+  }
+
+  const { entries, active_jobs, active_tasks } = data;
+  countEl.textContent = entries.length === 0
+    ? 'No flagged entries — everything looks good.'
+    : `${entries.length} flagged entr${entries.length === 1 ? 'y' : 'ies'} found.`;
+
+  entries.forEach(entry => {
+    const div = document.createElement('div');
+    div.className = 'admin-item flagged-entry-item';
+
+    const jobBadge  = entry.bad_job  ? '<span class="flag-badge">bad job</span>'  : '';
+    const taskBadge = entry.bad_task ? '<span class="flag-badge">bad task</span>' : '';
+
+    div.innerHTML = `
+      <div class="flagged-meta">
+        <span class="flagged-date">${entry.entry_date}</span>
+        <span class="flagged-employee">${escHtml(entry.employee_name)}</span>
+        <span class="flagged-hours">${entry.hours}h</span>
+        ${jobBadge}${taskBadge}
+      </div>
+      <div class="flagged-fields">
+        <label class="flagged-label">Job / Invoice
+          <select class="flagged-job-select">
+            <option value="${escHtml(entry.job_number)}" selected>${escHtml(entry.job_number)} (current — invalid)</option>
+            ${active_jobs.map(j => `<option value="${escHtml(j)}">${escHtml(j)}</option>`).join('')}
+          </select>
+        </label>
+        <label class="flagged-label">Task
+          <select class="flagged-task-select">
+            <option value="${escHtml(entry.task_name)}" data-category="" selected>${escHtml(entry.task_name)} (current — invalid)</option>
+            ${active_tasks.map(t => `<option value="${escHtml(t.name)}" data-category="${escHtml(t.category)}">${escHtml(t.name)}</option>`).join('')}
+          </select>
+        </label>
+        ${entry.description ? `<span class="flagged-desc">${escHtml(entry.description)}</span>` : ''}
+      </div>
+      <div class="item-actions">
+        <button class="btn btn-sm btn-primary save-flagged-btn">Save</button>
+      </div>
+      <div class="flagged-msg hidden"></div>`;
+
+    const jobSel  = div.querySelector('.flagged-job-select');
+    const taskSel = div.querySelector('.flagged-task-select');
+    const saveBtn = div.querySelector('.save-flagged-btn');
+    const msgEl   = div.querySelector('.flagged-msg');
+
+    saveBtn.addEventListener('click', async () => {
+      const newJob  = jobSel.value;
+      const newTask = taskSel.value;
+      const selOpt  = taskSel.options[taskSel.selectedIndex];
+      const newCat  = selOpt.dataset.category || entry.category;
+
+      msgEl.className = 'flagged-msg hidden';
+      saveBtn.disabled = true;
+      try {
+        await api('PUT', `/api/entries/${entry.id}`, {
+          employee_id: state.employeeId,
+          pin: state.pin,
+          entry_date:  entry.entry_date,
+          job_number:  newJob,
+          task_name:   newTask,
+          category:    newCat,
+          hours:       entry.hours,
+          description: entry.description,
+          notes:       entry.notes,
+        });
+        msgEl.textContent = 'Saved.';
+        msgEl.className = 'flagged-msg ok';
+        setTimeout(() => loadFlaggedEntries(), 800);
+      } catch (e) {
+        msgEl.textContent = e.message;
+        msgEl.className = 'flagged-msg err';
+        saveBtn.disabled = false;
+      }
+    });
+
+    list.appendChild(div);
+  });
+}
+
+function escHtml(str) {
+  return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+document.querySelector('.tab[data-tab="flagged"]').addEventListener('click', loadFlaggedEntries);
+$('refresh-flagged-btn').addEventListener('click', loadFlaggedEntries);
+
 /* ── Export ──────────────────────────────────────────────────────────────── */
 $('export-btn').addEventListener('click', () => {
   const from = $('export-from').value;

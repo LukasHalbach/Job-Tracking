@@ -722,6 +722,51 @@ def set_role_tasks(role_id):
     return jsonify({"ok": True})
 
 
+# ── Admin: Flagged Entries ────────────────────────────────────────────────────
+
+@app.route("/api/admin/flagged-entries", methods=["GET"])
+def admin_flagged_entries():
+    data = request.args
+    if not verify_admin(data.get("employee_id"), str(data.get("pin", ""))):
+        return jsonify({"error": "Unauthorized"}), 403
+
+    with get_db() as conn:
+        # Entries whose job_number no longer exists as an active job,
+        # OR whose task_name no longer exists as an active task.
+        # "Not Listed" job/task are intentional placeholders — excluded.
+        rows = conn.execute("""
+            SELECT te.id, te.entry_date, te.job_number, te.task_name,
+                   te.category, te.hours, te.description, te.notes,
+                   e.name AS employee_name,
+                   CASE WHEN j.id IS NULL THEN 1 ELSE 0 END AS bad_job,
+                   CASE WHEN t.id IS NULL THEN 1 ELSE 0 END AS bad_task
+            FROM time_entries te
+            JOIN employees e ON te.employee_id = e.id
+            LEFT JOIN jobs j
+                   ON j.job_number = te.job_number AND j.active = 1
+            LEFT JOIN tasks t
+                   ON t.name = te.task_name AND t.active = 1
+            WHERE te.job_number != 'Not Listed'
+              AND te.task_name  != 'Not Listed'
+              AND (j.id IS NULL OR t.id IS NULL)
+            ORDER BY te.entry_date DESC, te.id DESC
+            LIMIT 500
+        """).fetchall()
+
+        active_jobs  = conn.execute(
+            "SELECT job_number FROM jobs WHERE active=1 ORDER BY job_number"
+        ).fetchall()
+        active_tasks = conn.execute(
+            "SELECT name, category FROM tasks WHERE active=1 ORDER BY name"
+        ).fetchall()
+
+    return jsonify({
+        "entries": [dict(r) for r in rows],
+        "active_jobs":  [r["job_number"] for r in active_jobs],
+        "active_tasks": [{"name": r["name"], "category": r["category"]} for r in active_tasks],
+    })
+
+
 # ── Export ────────────────────────────────────────────────────────────────────
 
 @app.route("/api/export", methods=["GET"])
