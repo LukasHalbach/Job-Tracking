@@ -1186,13 +1186,13 @@ async function loadFlaggedEntries() {
       <div class="flagged-fields">
         <label class="flagged-label">Job / Invoice
           <select class="flagged-job-select">
-            <option value="${escHtml(entry.job_number)}" selected>${escHtml(entry.job_number)} (current — invalid)</option>
+            <option value="${escHtml(entry.job_number)}" selected>${escHtml(entry.job_number)}${entry.bad_job ? ' (current — invalid)' : ''}</option>
             ${active_jobs.map(j => `<option value="${escHtml(j)}">${escHtml(j)}</option>`).join('')}
           </select>
         </label>
         <label class="flagged-label">Task
           <select class="flagged-task-select">
-            <option value="${escHtml(entry.task_name)}" data-category="" selected>${escHtml(entry.task_name)} (current — invalid)</option>
+            <option value="${escHtml(entry.task_name)}" data-category="" selected>${escHtml(entry.task_name)}${entry.bad_task ? ' (current — invalid)' : ''}</option>
             ${active_tasks.map(t => `<option value="${escHtml(t.name)}" data-category="${escHtml(t.category)}">${escHtml(t.name)}</option>`).join('')}
           </select>
         </label>
