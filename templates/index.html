@@ -169,6 +169,7 @@
         <button class="tab" data-tab="employees">Employees</button>
         <button class="tab" data-tab="roles">Roles</button>
         <button class="tab" data-tab="export">Export Data</button>
+        <button class="tab" data-tab="flagged">Flagged Entries</button>
       </div>
 
       <!-- Jobs tab -->
@@ -245,6 +246,17 @@
           <button class="btn btn-primary" id="export-btn">Download Excel</button>
         </div>
         <p class="hint-block">Defaults to the current week. Adjust the dates for a custom range, or leave both blank to export everything.</p>
+      </div>
+
+      <!-- Flagged Entries tab -->
+      <div class="tab-content" id="tab-flagged">
+        <p class="hint-block" style="margin-bottom:.75rem">
+          These entries were logged with <strong>Not Listed</strong> as the job or task — the employee didn't know the real value at the time.
+          Select the correct job and/or task for each one and save.
+        </p>
+        <button class="btn btn-secondary btn-sm" id="refresh-flagged-btn" style="margin-bottom:.75rem">Refresh</button>
+        <div id="flagged-count" class="hint" style="margin-bottom:.5rem"></div>
+        <div class="admin-list" id="flagged-list"></div>
       </div>
     </div>
   </div>
@@ -366,6 +378,7 @@
           <thead>
             <tr>
               <th>Date</th>
+              <th id="col-employee" class="hidden">Employee</th>
               <th>Job</th>
               <th>Task</th>
               <th>Category</th>

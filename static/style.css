@@ -594,6 +594,12 @@ body {
 }
 .edit-btn:hover { background: var(--blue-light); }
 
+.entry-employee {
+  font-weight: 600;
+  color: var(--gray-600);
+  white-space: nowrap;
+}
+
 /* ── CSV Upload ───────────────────────────────────────────────────────────── */
 .csv-upload-section {
   background: var(--gray-50);
@@ -782,3 +788,92 @@ body {
 }
 .export-form .field { min-width: 150px; }
 .hint-block { font-size: .83rem; color: var(--gray-400); }
+
+/* ── Flagged Entries ──────────────────────────────────────────────────────── */
+.flagged-entry-item {
+  flex-direction: column;
+  align-items: stretch;
+  gap: .5rem;
+  padding: .75rem;
+  border-left: 3px solid var(--red);
+}
+.flagged-meta {
+  display: flex;
+  gap: .75rem;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: .83rem;
+}
+.flagged-date     { color: var(--gray-500); }
+.flagged-employee { font-weight: 600; color: var(--gray-800); }
+.flagged-hours    { color: var(--gray-600); }
+.flagged-desc     { font-size: .82rem; color: var(--gray-500); font-style: italic; }
+.flag-badge {
+  background: var(--red-light);
+  color: var(--red);
+  font-size: .72rem;
+  font-weight: 700;
+  padding: .15rem .45rem;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}
+.flagged-fields {
+  display: flex;
+  gap: .75rem;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+.flagged-label {
+  display: flex;
+  flex-direction: column;
+  gap: .2rem;
+  font-size: .78rem;
+  color: var(--gray-500);
+  font-weight: 500;
+  flex: 1;
+  min-width: 160px;
+}
+.flagged-label select,
+.flagged-label input.flagged-job-input {
+  padding: .3rem .5rem;
+  border: 1.5px solid var(--gray-300);
+  border-radius: var(--radius);
+  font-size: .85rem;
+  font-family: var(--font);
+  color: var(--gray-800);
+  background: #fff;
+  width: 100%;
+}
+.flagged-label select:focus,
+.flagged-label input.flagged-job-input:focus { outline: none; border-color: var(--blue); }
+.flagged-original {
+  display: flex;
+  align-items: baseline;
+  gap: .4rem;
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+  padding: .35rem .6rem;
+  font-size: .83rem;
+}
+.flagged-original-label {
+  color: var(--gray-500);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.flagged-original-value {
+  color: var(--gray-800);
+  font-style: italic;
+}
+.flagged-job-desc {
+  align-self: flex-end;
+  font-size: .82rem;
+  color: var(--gray-500);
+  padding-bottom: .35rem;
+  min-width: 120px;
+  font-style: italic;
+}
+.flagged-msg { font-size: .83rem; margin-top: .15rem; }
+.flagged-msg.ok  { color: var(--green); }
+.flagged-msg.err { color: var(--red); }

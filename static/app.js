@@ -430,6 +430,7 @@ async function loadEntries() {
   const from = $('filter-from').value;
   const to   = $('filter-to').value;
   let url = `/api/entries?employee_id=${state.employeeId}`;
+  if (state.isAdmin) url += `&all_employees=1`;
   if (from) url += `&date_from=${from}`;
   if (to)   url += `&date_to=${to}`;
   state.entries = await api('GET', url);
@@ -500,11 +501,15 @@ $('submit-btn').addEventListener('click', async () => {
 
 /* ── Entries table ───────────────────────────────────────────────────────── */
 function renderEntries() {
-  const tbody = $('entries-body');
+  const tbody   = $('entries-body');
+  const colSpan = state.isAdmin ? 9 : 8;
   tbody.innerHTML = '';
 
+  // Show/hide the Employee column header
+  $('col-employee').classList.toggle('hidden', !state.isAdmin);
+
   if (!state.entries.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="empty-row">No entries found.</td></tr>';
+    tbody.innerHTML = `<tr><td colspan="${colSpan}" class="empty-row">No entries found.</td></tr>`;
     $('entries-total').textContent = '';
     return;
   }
@@ -515,9 +520,13 @@ function renderEntries() {
     const jobDisplay = e.job_description
       ? `${e.job_number} — ${e.job_description}`
       : e.job_number;
+    const empCell = state.isAdmin
+      ? `<td class="entry-employee">${escHtml(e.employee_name)}</td>`
+      : '';
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${e.entry_date}</td>
+      ${empCell}
       <td title="${jobDisplay}">${jobDisplay}</td>
       <td title="${e.task_name}">${e.task_name}</td>
       <td title="${e.category}">${e.category}</td>
@@ -1148,6 +1157,142 @@ $('add-role-btn').addEventListener('click', async () => {
   $('new-role-name').value = '';
   await loadAdminRoles();
 });
+
+/* ── Admin: Flagged Entries ──────────────────────────────────────────────── */
+async function loadFlaggedEntries() {
+  const countEl = $('flagged-count');
+  const list    = $('flagged-list');
+  list.innerHTML = '';
+  countEl.textContent = 'Loading…';
+
+  let data;
+  try {
+    data = await api('GET', `/api/admin/flagged-entries?employee_id=${state.employeeId}&pin=${encodeURIComponent(state.pin)}`);
+  } catch (e) {
+    countEl.textContent = 'Error: ' + e.message;
+    return;
+  }
+
+  const { entries, active_jobs, active_tasks } = data;
+  countEl.textContent = entries.length === 0
+    ? 'No flagged entries — everything looks good.'
+    : `${entries.length} flagged entr${entries.length === 1 ? 'y' : 'ies'} found.`;
+
+  entries.forEach(entry => {
+    const div = document.createElement('div');
+    div.className = 'admin-item flagged-entry-item';
+
+    const jobBadge  = entry.bad_job  ? '<span class="flag-badge">bad job</span>'  : '';
+    const taskBadge = entry.bad_task ? '<span class="flag-badge">bad task</span>' : '';
+
+    const comboId   = `flagged-job-input-${entry.id}`;
+    const comboListId = `flagged-job-list-${entry.id}`;
+
+    div.innerHTML = `
+      <div class="flagged-meta">
+        <span class="flagged-date">${entry.entry_date}</span>
+        <span class="flagged-employee">${escHtml(entry.employee_name)}</span>
+        <span class="flagged-hours">${entry.hours}h</span>
+        ${jobBadge}${taskBadge}
+      </div>
+      ${entry.bad_job && entry.description ? `
+      <div class="flagged-original">
+        <span class="flagged-original-label">Employee noted:</span>
+        <span class="flagged-original-value">${escHtml(entry.description)}</span>
+      </div>` : ''}
+      <div class="flagged-fields">
+        <label class="flagged-label">Job / Invoice
+          <div class="combo-wrap" style="position:relative">
+            <input id="${comboId}" class="flagged-job-input combo-input"
+                   value="${escHtml(entry.bad_job ? '' : entry.job_number)}"
+                   placeholder="${escHtml(entry.bad_job ? 'Search job or invoice…' : entry.job_number)}"
+                   autocomplete="off" />
+            <ul id="${comboListId}" class="combo-list hidden"></ul>
+          </div>
+        </label>
+        <span class="flagged-job-desc hint"></span>
+        <label class="flagged-label">Task
+          <select class="flagged-task-select">
+            <option value="${escHtml(entry.task_name)}" data-category="" selected>${escHtml(entry.task_name)}${entry.bad_task ? ' (current — invalid)' : ''}</option>
+            ${active_tasks.map(t => `<option value="${escHtml(t.name)}" data-category="${escHtml(t.category)}">${escHtml(t.name)}</option>`).join('')}
+          </select>
+        </label>
+      </div>
+      <div class="item-actions">
+        <button class="btn btn-sm btn-primary save-flagged-btn">Save</button>
+      </div>
+      <div class="flagged-msg hidden"></div>`;
+
+    // Append to DOM first so document.getElementById can find the combo elements
+    list.appendChild(div);
+
+    const jobDescEl = div.querySelector('.flagged-job-desc');
+    const taskSel   = div.querySelector('.flagged-task-select');
+    const saveBtn   = div.querySelector('.save-flagged-btn');
+    const msgEl     = div.querySelector('.flagged-msg');
+
+    // Track the currently selected job number (null = nothing chosen yet)
+    let selectedJobNumber = entry.bad_job ? null : entry.job_number;
+
+    makeCombo({
+      inputId: comboId,
+      listId:  comboListId,
+      items:   active_jobs,
+      getLabel: j => j.job_number,
+      getSub:   j => j.description || '',
+      getSearch: j => `${j.job_number} ${j.description}`,
+      clearOnFocus: false,
+      setInputOnSelect: true,
+      onSelect: j => {
+        selectedJobNumber = j.job_number;
+        jobDescEl.textContent = j.description || '';
+      },
+    });
+
+    saveBtn.addEventListener('click', async () => {
+      const newJob  = selectedJobNumber;
+      const newTask = taskSel.value;
+      const selOpt  = taskSel.options[taskSel.selectedIndex];
+      const newCat  = selOpt.dataset.category || entry.category;
+
+      if (!newJob) {
+        msgEl.textContent = 'Please select a job from the list.';
+        msgEl.className = 'flagged-msg err';
+        return;
+      }
+
+      msgEl.className = 'flagged-msg hidden';
+      saveBtn.disabled = true;
+      try {
+        await api('PUT', `/api/entries/${entry.id}`, {
+          employee_id: state.employeeId,
+          pin: state.pin,
+          entry_date:  entry.entry_date,
+          job_number:  newJob,
+          task_name:   newTask,
+          category:    newCat,
+          hours:       entry.hours,
+          description: entry.description,
+          notes:       entry.notes,
+        });
+        msgEl.textContent = 'Saved.';
+        msgEl.className = 'flagged-msg ok';
+        setTimeout(() => loadFlaggedEntries(), 800);
+      } catch (e) {
+        msgEl.textContent = e.message;
+        msgEl.className = 'flagged-msg err';
+        saveBtn.disabled = false;
+      }
+    });
+  });
+}
+
+function escHtml(str) {
+  return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+document.querySelector('.tab[data-tab="flagged"]').addEventListener('click', loadFlaggedEntries);
+$('refresh-flagged-btn').addEventListener('click', loadFlaggedEntries);
 
 /* ── Export ──────────────────────────────────────────────────────────────── */
 $('export-btn').addEventListener('click', () => {
