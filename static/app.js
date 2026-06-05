@@ -1209,6 +1209,9 @@ async function loadFlaggedEntries() {
       </div>
       <div class="flagged-msg hidden"></div>`;
 
+    // Append to DOM first so document.getElementById can find the combo elements
+    list.appendChild(div);
+
     const jobDescEl = div.querySelector('.flagged-job-desc');
     const taskSel   = div.querySelector('.flagged-task-select');
     const saveBtn   = div.querySelector('.save-flagged-btn');
@@ -1267,8 +1270,6 @@ async function loadFlaggedEntries() {
         saveBtn.disabled = false;
       }
     });
-
-    list.appendChild(div);
   });
 }
 
