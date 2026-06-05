@@ -1186,6 +1186,11 @@ async function loadFlaggedEntries() {
         <span class="flagged-hours">${entry.hours}h</span>
         ${jobBadge}${taskBadge}
       </div>
+      ${entry.bad_job && entry.description ? `
+      <div class="flagged-original">
+        <span class="flagged-original-label">Employee noted:</span>
+        <span class="flagged-original-value">${escHtml(entry.description)}</span>
+      </div>` : ''}
       <div class="flagged-fields">
         <label class="flagged-label">Job / Invoice
           <div class="combo-wrap" style="position:relative">

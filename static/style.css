@@ -841,6 +841,25 @@ body {
 }
 .flagged-label select:focus,
 .flagged-label input.flagged-job-input:focus { outline: none; border-color: var(--blue); }
+.flagged-original {
+  display: flex;
+  align-items: baseline;
+  gap: .4rem;
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+  padding: .35rem .6rem;
+  font-size: .83rem;
+}
+.flagged-original-label {
+  color: var(--gray-500);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.flagged-original-value {
+  color: var(--gray-800);
+  font-style: italic;
+}
 .flagged-job-desc {
   align-self: flex-end;
   font-size: .82rem;
