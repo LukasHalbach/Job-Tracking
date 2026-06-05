@@ -874,6 +874,18 @@ body {
   min-width: 120px;
   font-style: italic;
 }
+.flagged-notes-wrap { width: 100%; }
+.flagged-notes-input {
+  width: 100%;
+  padding: .35rem .5rem;
+  border: 1.5px solid var(--gray-300);
+  border-radius: var(--radius);
+  font-size: .85rem;
+  font-family: var(--font);
+  color: var(--gray-800);
+  resize: vertical;
+}
+.flagged-notes-input:focus { outline: none; border-color: var(--blue); }
 .flagged-msg { font-size: .83rem; margin-top: .15rem; }
 .flagged-msg.ok  { color: var(--green); }
 .flagged-msg.err { color: var(--red); }

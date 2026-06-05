@@ -1218,6 +1218,11 @@ async function loadFlaggedEntries() {
           </select>
         </label>
       </div>
+      <div class="flagged-notes-wrap ${entry.bad_task ? '' : 'hidden'}">
+        <label class="flagged-label" style="width:100%">Notes <span class="required">*</span>
+          <textarea class="flagged-notes-input" rows="2" placeholder="Describe what the task actually was…">${escHtml(entry.notes || '')}</textarea>
+        </label>
+      </div>
       <div class="item-actions">
         <button class="btn btn-sm btn-primary save-flagged-btn">Save</button>
       </div>
@@ -1226,10 +1231,16 @@ async function loadFlaggedEntries() {
     // Append to DOM first so document.getElementById can find the combo elements
     list.appendChild(div);
 
-    const jobDescEl = div.querySelector('.flagged-job-desc');
-    const taskSel   = div.querySelector('.flagged-task-select');
-    const saveBtn   = div.querySelector('.save-flagged-btn');
-    const msgEl     = div.querySelector('.flagged-msg');
+    const jobDescEl   = div.querySelector('.flagged-job-desc');
+    const taskSel     = div.querySelector('.flagged-task-select');
+    const notesWrap   = div.querySelector('.flagged-notes-wrap');
+    const notesInput  = div.querySelector('.flagged-notes-input');
+    const saveBtn     = div.querySelector('.save-flagged-btn');
+    const msgEl       = div.querySelector('.flagged-msg');
+
+    taskSel.addEventListener('change', () => {
+      notesWrap.classList.toggle('hidden', taskSel.value !== 'Not Listed');
+    });
 
     // Track the currently selected job number (null = nothing chosen yet)
     let selectedJobNumber = entry.bad_job ? null : entry.job_number;
@@ -1255,8 +1266,15 @@ async function loadFlaggedEntries() {
       const selOpt  = taskSel.options[taskSel.selectedIndex];
       const newCat  = selOpt.dataset.category || entry.category;
 
+      const newNotes = notesInput.value.trim();
+
       if (!newJob) {
         msgEl.textContent = 'Please select a job from the list.';
+        msgEl.className = 'flagged-msg err';
+        return;
+      }
+      if (newTask === 'Not Listed' && !newNotes) {
+        msgEl.textContent = 'Please describe the task in the Notes field.';
         msgEl.className = 'flagged-msg err';
         return;
       }
@@ -1273,7 +1291,7 @@ async function loadFlaggedEntries() {
           category:    newCat,
           hours:       entry.hours,
           description: entry.description,
-          notes:       entry.notes,
+          notes:       newNotes || entry.notes,
         });
         msgEl.textContent = 'Saved.';
         msgEl.className = 'flagged-msg ok';
