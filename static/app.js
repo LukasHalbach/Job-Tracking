@@ -1176,6 +1176,9 @@ async function loadFlaggedEntries() {
     const jobBadge  = entry.bad_job  ? '<span class="flag-badge">bad job</span>'  : '';
     const taskBadge = entry.bad_task ? '<span class="flag-badge">bad task</span>' : '';
 
+    const comboId   = `flagged-job-input-${entry.id}`;
+    const comboListId = `flagged-job-list-${entry.id}`;
+
     div.innerHTML = `
       <div class="flagged-meta">
         <span class="flagged-date">${entry.entry_date}</span>
@@ -1185,10 +1188,13 @@ async function loadFlaggedEntries() {
       </div>
       <div class="flagged-fields">
         <label class="flagged-label">Job / Invoice
-          <select class="flagged-job-select">
-            <option value="${escHtml(entry.job_number)}" data-desc="" selected>${escHtml(entry.job_number)}${entry.bad_job ? ' (current — invalid)' : ''}</option>
-            ${active_jobs.map(j => `<option value="${escHtml(j.job_number)}" data-desc="${escHtml(j.description)}">${escHtml(j.job_number)}${j.description ? ' — ' + escHtml(j.description) : ''}</option>`).join('')}
-          </select>
+          <div class="combo-wrap" style="position:relative">
+            <input id="${comboId}" class="flagged-job-input combo-input"
+                   value="${escHtml(entry.bad_job ? '' : entry.job_number)}"
+                   placeholder="${escHtml(entry.bad_job ? 'Search job or invoice…' : entry.job_number)}"
+                   autocomplete="off" />
+            <ul id="${comboListId}" class="combo-list hidden"></ul>
+          </div>
         </label>
         <span class="flagged-job-desc hint"></span>
         <label class="flagged-label">Task
@@ -1203,23 +1209,40 @@ async function loadFlaggedEntries() {
       </div>
       <div class="flagged-msg hidden"></div>`;
 
-    const jobSel   = div.querySelector('.flagged-job-select');
     const jobDescEl = div.querySelector('.flagged-job-desc');
-    const taskSel  = div.querySelector('.flagged-task-select');
-    const saveBtn  = div.querySelector('.save-flagged-btn');
-    const msgEl    = div.querySelector('.flagged-msg');
+    const taskSel   = div.querySelector('.flagged-task-select');
+    const saveBtn   = div.querySelector('.save-flagged-btn');
+    const msgEl     = div.querySelector('.flagged-msg');
 
-    const updateJobDesc = () => {
-      const desc = jobSel.options[jobSel.selectedIndex]?.dataset.desc || '';
-      jobDescEl.textContent = desc;
-    };
-    jobSel.addEventListener('change', updateJobDesc);
+    // Track the currently selected job number (null = nothing chosen yet)
+    let selectedJobNumber = entry.bad_job ? null : entry.job_number;
+
+    makeCombo({
+      inputId: comboId,
+      listId:  comboListId,
+      items:   active_jobs,
+      getLabel: j => j.job_number,
+      getSub:   j => j.description || '',
+      getSearch: j => `${j.job_number} ${j.description}`,
+      clearOnFocus: false,
+      setInputOnSelect: true,
+      onSelect: j => {
+        selectedJobNumber = j.job_number;
+        jobDescEl.textContent = j.description || '';
+      },
+    });
 
     saveBtn.addEventListener('click', async () => {
-      const newJob  = jobSel.value;
+      const newJob  = selectedJobNumber;
       const newTask = taskSel.value;
       const selOpt  = taskSel.options[taskSel.selectedIndex];
       const newCat  = selOpt.dataset.category || entry.category;
+
+      if (!newJob) {
+        msgEl.textContent = 'Please select a job from the list.';
+        msgEl.className = 'flagged-msg err';
+        return;
+      }
 
       msgEl.className = 'flagged-msg hidden';
       saveBtn.disabled = true;

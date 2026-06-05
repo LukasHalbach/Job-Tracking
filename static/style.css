@@ -828,7 +828,8 @@ body {
   flex: 1;
   min-width: 160px;
 }
-.flagged-label select {
+.flagged-label select,
+.flagged-label input.flagged-job-input {
   padding: .3rem .5rem;
   border: 1.5px solid var(--gray-300);
   border-radius: var(--radius);
@@ -836,9 +837,10 @@ body {
   font-family: var(--font);
   color: var(--gray-800);
   background: #fff;
-  cursor: pointer;
+  width: 100%;
 }
-.flagged-label select:focus { outline: none; border-color: var(--blue); }
+.flagged-label select:focus,
+.flagged-label input.flagged-job-input:focus { outline: none; border-color: var(--blue); }
 .flagged-job-desc {
   align-self: flex-end;
   font-size: .82rem;
