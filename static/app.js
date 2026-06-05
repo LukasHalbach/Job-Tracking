@@ -97,14 +97,23 @@ function renderJobTags() {
   const hasShop = state.selectedJobs.some(j => j.job_number === 'Shop');
   input.style.display = hasShop ? 'none' : '';
   $('split-job-wrap').style.display = state.selectedJobs.length >= 2 ? '' : 'none';
+  updateCombinedNotesLabel('combined-notes-label',
+    state.selectedJobs.some(j => j.job_number === 'Not Listed'),
+    $('task-input').value.trim() === 'Not Listed'
+  );
+}
 
-  // Require description when "Not Listed" job is selected
-  const hasNotListed = state.selectedJobs.some(j => j.job_number === 'Not Listed');
-  const descLabel = document.querySelector('label[for="description"]');
-  if (descLabel) {
-    descLabel.innerHTML = hasNotListed
-      ? 'Description <span class="required">*</span> <span class="hint">(required — note the actual invoice/job name)</span>'
-      : 'Description <span class="hint">(optional)</span>';
+function updateCombinedNotesLabel(labelId, notListedJob, notListedTask) {
+  const el = $(labelId);
+  if (!el) return;
+  if (notListedJob && notListedTask) {
+    el.innerHTML = 'Describe the invoice and task <span class="required">*</span>';
+  } else if (notListedJob) {
+    el.innerHTML = 'What was the invoice / job? <span class="required">*</span>';
+  } else if (notListedTask) {
+    el.innerHTML = 'What was the task? <span class="required">*</span>';
+  } else {
+    el.innerHTML = 'Notes <span class="hint">(optional)</span>';
   }
 }
 
@@ -240,7 +249,10 @@ function initCombos() {
     onSelect: t => {
       $('task-input').value = t.name;
       $('category').value   = t.category;
-      $('notes-wrap').classList.toggle('hidden', t.name !== 'Not Listed');
+      updateCombinedNotesLabel('combined-notes-label',
+        state.selectedJobs.some(j => j.job_number === 'Not Listed'),
+        t.name === 'Not Listed'
+      );
     },
   });
 
@@ -251,7 +263,13 @@ function initCombos() {
     getLabel: j => j.job_number,
     getSub:   j => j.description || '',
     getSearch: j => `${j.job_number} ${j.description || ''}`,
-    onSelect: j => { $('edit-job-input').value = j.job_number; },
+    onSelect: j => {
+      $('edit-job-input').value = j.job_number;
+      updateCombinedNotesLabel('edit-combined-notes-label',
+        j.job_number === 'Not Listed',
+        $('edit-task-input').value.trim() === 'Not Listed'
+      );
+    },
   });
 
   editTaskCombo = makeCombo({
@@ -264,7 +282,10 @@ function initCombos() {
     onSelect: t => {
       $('edit-task-input').value = t.name;
       $('edit-category').value   = t.category;
-      $('edit-notes-wrap').classList.toggle('hidden', t.name !== 'Not Listed');
+      updateCombinedNotesLabel('edit-combined-notes-label',
+        $('edit-job-input').value.trim() === 'Not Listed',
+        t.name === 'Not Listed'
+      );
     },
   });
 }
@@ -410,7 +431,10 @@ async function loadTasks() {
       onSelect: t => {
         $('task-input').value = t.name;
         $('category').value   = t.category;
-        $('notes-wrap').classList.toggle('hidden', t.name !== 'Not Listed');
+        updateCombinedNotesLabel('combined-notes-label',
+          state.selectedJobs.some(j => j.job_number === 'Not Listed'),
+          t.name === 'Not Listed'
+        );
       },
     });
     editTaskCombo = makeCombo({
@@ -420,7 +444,10 @@ async function loadTasks() {
       onSelect: t => {
         $('edit-task-input').value = t.name;
         $('edit-category').value   = t.category;
-        $('edit-notes-wrap').classList.toggle('hidden', t.name !== 'Not Listed');
+        updateCombinedNotesLabel('edit-combined-notes-label',
+          $('edit-job-input').value.trim() === 'Not Listed',
+          t.name === 'Not Listed'
+        );
       },
     });
   }
@@ -444,12 +471,11 @@ function clearForm() {
   renderJobTags();
   $('job-input').value    = '';
   $('task-input').value   = '';
-  $('category').value     = '';
-  $('hours').value        = '';
-  $('description').value  = '';
-  $('notes').value        = '';
-  $('notes-wrap').classList.add('hidden');
-  $('split-job').checked  = false;
+  $('category').value          = '';
+  $('hours').value             = '';
+  $('combined-notes').value    = '';
+  updateCombinedNotesLabel('combined-notes-label', false, false);
+  $('split-job').checked       = false;
   $('entry-error').classList.add('hidden');
   $('entry-success').classList.add('hidden');
 }
@@ -459,21 +485,28 @@ $('clear-btn').addEventListener('click', clearForm);
 $('submit-btn').addEventListener('click', async () => {
   const err = $('entry-error');
   err.classList.add('hidden');
-  const taskName  = $('task-input').value.trim();
-  const category  = $('category').value.trim();
-  const hours     = parseFloat($('hours').value);
-  const desc      = $('description').value.trim();
-  const notes     = $('notes').value.trim();
-  const entryDate = $('entry-date').value;
-  const split     = $('split-job').checked;
+  const taskName    = $('task-input').value.trim();
+  const category    = $('category').value.trim();
+  const hours       = parseFloat($('hours').value);
+  const combined    = $('combined-notes').value.trim();
+  const entryDate   = $('entry-date').value;
+  const split       = $('split-job').checked;
+  const hasNotListedJob  = state.selectedJobs.some(j => j.job_number === 'Not Listed');
+  const hasNotListedTask = taskName === 'Not Listed';
 
   if (!state.selectedJobs.length) { showMsg(err, 'Please select a Job / Invoice from the list.'); return; }
   if (!taskName)  { showMsg(err, 'Please select a task.'); return; }
   if (!category)  { showMsg(err, 'Category could not be determined. Please re-select the task.'); return; }
   if (!hours || hours <= 0) { showMsg(err, 'Please enter a valid number of hours.'); return; }
-  if (taskName === 'Not Listed' && !notes) { showMsg(err, 'Please describe the task in the Notes field.'); return; }
-  const hasNotListedJob = state.selectedJobs.some(j => j.job_number === 'Not Listed');
-  if (hasNotListedJob && !desc) { showMsg(err, 'Please enter a description to identify the actual invoice/job.'); return; }
+  if ((hasNotListedJob || hasNotListedTask) && !combined) {
+    showMsg(err, hasNotListedJob && hasNotListedTask
+      ? 'Please describe both the invoice and the task in the Notes field.'
+      : hasNotListedJob
+        ? 'Please identify the actual invoice / job in the Notes field.'
+        : 'Please describe the task in the Notes field.'
+    );
+    return;
+  }
 
   const jobHours = split ? round2(hours / state.selectedJobs.length) : hours;
 
@@ -482,13 +515,13 @@ $('submit-btn').addEventListener('click', async () => {
       api('POST', '/api/entries', {
         employee_id: state.employeeId,
         pin: state.pin,
-        entry_date: entryDate,
-        job_number: j.job_number,
-        task_name:  taskName,
+        entry_date:  entryDate,
+        job_number:  j.job_number,
+        task_name:   taskName,
         category,
-        hours: jobHours,
-        description: desc,
-        notes,
+        hours:       jobHours,
+        description: hasNotListedJob ? combined : combined,
+        notes:       combined,
       })
     ));
     showMsg($('entry-success'), 'Entry saved successfully!', 'success');
@@ -558,16 +591,18 @@ $('refresh-btn').addEventListener('click', loadEntries);
 function openEditModal(id) {
   const entry = state.entries.find(e => e.id === id);
   if (!entry) return;
-  $('edit-entry-id').value     = id;
-  $('edit-date').value         = entry.entry_date;
-  $('edit-job-input').value    = entry.job_number;
-  $('edit-task-input').value   = entry.task_name;
-  $('edit-category').value     = entry.category;
-  $('edit-hours').value        = entry.hours;
-  $('edit-description').value  = entry.description || '';
-  $('edit-notes').value        = entry.notes || '';
-  $('edit-notes-wrap').classList.toggle('hidden', entry.task_name !== 'Not Listed');
+  $('edit-entry-id').value           = id;
+  $('edit-date').value               = entry.entry_date;
+  $('edit-job-input').value          = entry.job_number;
+  $('edit-task-input').value         = entry.task_name;
+  $('edit-category').value           = entry.category;
+  $('edit-hours').value              = entry.hours;
+  $('edit-combined-notes').value     = entry.notes || entry.description || '';
   $('edit-error').classList.add('hidden');
+  updateCombinedNotesLabel('edit-combined-notes-label',
+    entry.job_number === 'Not Listed',
+    entry.task_name  === 'Not Listed'
+  );
   showOverlay('edit-overlay');
 }
 
@@ -579,27 +614,36 @@ $('edit-save-btn').addEventListener('click', async () => {
   const taskName  = $('edit-task-input').value.trim();
   const category  = $('edit-category').value.trim();
   const hours     = parseFloat($('edit-hours').value);
-  const desc      = $('edit-description').value.trim();
-  const notes     = $('edit-notes').value.trim();
+  const combined  = $('edit-combined-notes').value.trim();
   const entryDate = $('edit-date').value;
   const err = $('edit-error');
   err.classList.add('hidden');
 
+  const notListedJob  = jobNumber === 'Not Listed';
+  const notListedTask = taskName  === 'Not Listed';
+
   if (!jobNumber) { showMsg(err, 'Job number required.'); return; }
   if (!taskName)  { showMsg(err, 'Task required.'); return; }
   if (!hours || hours <= 0) { showMsg(err, 'Valid hours required.'); return; }
+  if ((notListedJob || notListedTask) && !combined) {
+    showMsg(err, notListedJob && notListedTask
+      ? 'Please describe both the invoice and the task.'
+      : notListedJob ? 'Please identify the actual invoice / job.' : 'Please describe the task.'
+    );
+    return;
+  }
 
   try {
     await api('PUT', `/api/entries/${id}`, {
       employee_id: state.employeeId,
       pin: state.pin,
-      entry_date: entryDate,
-      job_number: jobNumber,
-      task_name: taskName,
+      entry_date:  entryDate,
+      job_number:  jobNumber,
+      task_name:   taskName,
       category,
       hours,
-      description: desc,
-      notes,
+      description: combined,
+      notes:       combined,
     });
     hideOverlay('edit-overlay');
     await loadEntries();
@@ -1188,6 +1232,9 @@ async function loadFlaggedEntries() {
     const comboId   = `flagged-job-input-${entry.id}`;
     const comboListId = `flagged-job-list-${entry.id}`;
 
+    const notesLabelId = `flagged-notes-label-${entry.id}`;
+    const prefillNotes = entry.notes || entry.description || '';
+
     div.innerHTML = `
       <div class="flagged-meta">
         <span class="flagged-date">${entry.entry_date}</span>
@@ -1195,11 +1242,6 @@ async function loadFlaggedEntries() {
         <span class="flagged-hours">${entry.hours}h</span>
         ${jobBadge}${taskBadge}
       </div>
-      ${entry.bad_job && entry.description ? `
-      <div class="flagged-original">
-        <span class="flagged-original-label">Employee noted:</span>
-        <span class="flagged-original-value">${escHtml(entry.description)}</span>
-      </div>` : ''}
       <div class="flagged-fields">
         <label class="flagged-label">Job / Invoice
           <div class="combo-wrap" style="position:relative">
@@ -1218,6 +1260,10 @@ async function loadFlaggedEntries() {
           </select>
         </label>
       </div>
+      <div class="field" style="width:100%">
+        <label id="${notesLabelId}"></label>
+        <textarea class="flagged-combined-notes" rows="2">${escHtml(prefillNotes)}</textarea>
+      </div>
       <div class="item-actions">
         <button class="btn btn-sm btn-primary save-flagged-btn">Save</button>
       </div>
@@ -1226,13 +1272,30 @@ async function loadFlaggedEntries() {
     // Append to DOM first so document.getElementById can find the combo elements
     list.appendChild(div);
 
-    const jobDescEl = div.querySelector('.flagged-job-desc');
-    const taskSel   = div.querySelector('.flagged-task-select');
-    const saveBtn   = div.querySelector('.save-flagged-btn');
-    const msgEl     = div.querySelector('.flagged-msg');
+    const jobDescEl   = div.querySelector('.flagged-job-desc');
+    const taskSel     = div.querySelector('.flagged-task-select');
+    const notesEl     = div.querySelector('.flagged-combined-notes');
+    const saveBtn     = div.querySelector('.save-flagged-btn');
+    const msgEl       = div.querySelector('.flagged-msg');
 
-    // Track the currently selected job number (null = nothing chosen yet)
+    // Track selected job and set initial label
     let selectedJobNumber = entry.bad_job ? null : entry.job_number;
+
+    const refreshFlaggedLabel = () => {
+      updateCombinedNotesLabel(notesLabelId,
+        selectedJobNumber === 'Not Listed' || entry.bad_job,
+        taskSel.value === 'Not Listed' || entry.bad_task
+      );
+    };
+
+    taskSel.addEventListener('change', () => {
+      refreshFlaggedLabel();
+      // Update label based on live selections, not initial bad flags
+      updateCombinedNotesLabel(notesLabelId,
+        selectedJobNumber === 'Not Listed',
+        taskSel.value === 'Not Listed'
+      );
+    });
 
     makeCombo({
       inputId: comboId,
@@ -1246,17 +1309,33 @@ async function loadFlaggedEntries() {
       onSelect: j => {
         selectedJobNumber = j.job_number;
         jobDescEl.textContent = j.description || '';
+        updateCombinedNotesLabel(notesLabelId,
+          j.job_number === 'Not Listed',
+          taskSel.value === 'Not Listed'
+        );
       },
     });
 
+    // Set initial label based on current flags
+    updateCombinedNotesLabel(notesLabelId, !!entry.bad_job, !!entry.bad_task);
+
     saveBtn.addEventListener('click', async () => {
-      const newJob  = selectedJobNumber;
-      const newTask = taskSel.value;
-      const selOpt  = taskSel.options[taskSel.selectedIndex];
-      const newCat  = selOpt.dataset.category || entry.category;
+      const newJob     = selectedJobNumber;
+      const newTask    = taskSel.value;
+      const selOpt     = taskSel.options[taskSel.selectedIndex];
+      const newCat     = selOpt.dataset.category || entry.category;
+      const newNotes   = notesEl.value.trim();
+      const needsNotes = newJob === 'Not Listed' || newTask === 'Not Listed';
 
       if (!newJob) {
         msgEl.textContent = 'Please select a job from the list.';
+        msgEl.className = 'flagged-msg err';
+        return;
+      }
+      if (needsNotes && !newNotes) {
+        msgEl.textContent = newJob === 'Not Listed' && newTask === 'Not Listed'
+          ? 'Please describe both the invoice and the task.'
+          : newJob === 'Not Listed' ? 'Please identify the actual invoice / job.' : 'Please describe the task.';
         msgEl.className = 'flagged-msg err';
         return;
       }
@@ -1272,8 +1351,8 @@ async function loadFlaggedEntries() {
           task_name:   newTask,
           category:    newCat,
           hours:       entry.hours,
-          description: entry.description,
-          notes:       entry.notes,
+          description: newNotes || entry.description,
+          notes:       newNotes || entry.notes,
         });
         msgEl.textContent = 'Saved.';
         msgEl.className = 'flagged-msg ok';
