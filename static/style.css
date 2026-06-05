@@ -594,6 +594,12 @@ body {
 }
 .edit-btn:hover { background: var(--blue-light); }
 
+.entry-employee {
+  font-weight: 600;
+  color: var(--gray-600);
+  white-space: nowrap;
+}
+
 /* ── CSV Upload ───────────────────────────────────────────────────────────── */
 .csv-upload-section {
   background: var(--gray-50);

@@ -430,6 +430,7 @@ async function loadEntries() {
   const from = $('filter-from').value;
   const to   = $('filter-to').value;
   let url = `/api/entries?employee_id=${state.employeeId}`;
+  if (state.isAdmin) url += `&all_employees=1`;
   if (from) url += `&date_from=${from}`;
   if (to)   url += `&date_to=${to}`;
   state.entries = await api('GET', url);
@@ -500,11 +501,15 @@ $('submit-btn').addEventListener('click', async () => {
 
 /* ── Entries table ───────────────────────────────────────────────────────── */
 function renderEntries() {
-  const tbody = $('entries-body');
+  const tbody   = $('entries-body');
+  const colSpan = state.isAdmin ? 9 : 8;
   tbody.innerHTML = '';
 
+  // Show/hide the Employee column header
+  $('col-employee').classList.toggle('hidden', !state.isAdmin);
+
   if (!state.entries.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="empty-row">No entries found.</td></tr>';
+    tbody.innerHTML = `<tr><td colspan="${colSpan}" class="empty-row">No entries found.</td></tr>`;
     $('entries-total').textContent = '';
     return;
   }
@@ -515,9 +520,13 @@ function renderEntries() {
     const jobDisplay = e.job_description
       ? `${e.job_number} — ${e.job_description}`
       : e.job_number;
+    const empCell = state.isAdmin
+      ? `<td class="entry-employee">${escHtml(e.employee_name)}</td>`
+      : '';
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${e.entry_date}</td>
+      ${empCell}
       <td title="${jobDisplay}">${jobDisplay}</td>
       <td title="${e.task_name}">${e.task_name}</td>
       <td title="${e.category}">${e.category}</td>
