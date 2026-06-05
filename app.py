@@ -748,7 +748,7 @@ def admin_flagged_entries():
         """).fetchall()
 
         active_jobs  = conn.execute(
-            "SELECT job_number FROM jobs WHERE active=1 ORDER BY job_number"
+            "SELECT job_number, description FROM jobs WHERE active=1 ORDER BY job_number"
         ).fetchall()
         active_tasks = conn.execute(
             "SELECT name, category FROM tasks WHERE active=1 ORDER BY name"
@@ -756,7 +756,7 @@ def admin_flagged_entries():
 
     return jsonify({
         "entries": [dict(r) for r in rows],
-        "active_jobs":  [r["job_number"] for r in active_jobs],
+        "active_jobs":  [{"job_number": r["job_number"], "description": r["description"] or ""} for r in active_jobs],
         "active_tasks": [{"name": r["name"], "category": r["category"]} for r in active_tasks],
     })
 

@@ -1186,27 +1186,34 @@ async function loadFlaggedEntries() {
       <div class="flagged-fields">
         <label class="flagged-label">Job / Invoice
           <select class="flagged-job-select">
-            <option value="${escHtml(entry.job_number)}" selected>${escHtml(entry.job_number)}${entry.bad_job ? ' (current — invalid)' : ''}</option>
-            ${active_jobs.map(j => `<option value="${escHtml(j)}">${escHtml(j)}</option>`).join('')}
+            <option value="${escHtml(entry.job_number)}" data-desc="" selected>${escHtml(entry.job_number)}${entry.bad_job ? ' (current — invalid)' : ''}</option>
+            ${active_jobs.map(j => `<option value="${escHtml(j.job_number)}" data-desc="${escHtml(j.description)}">${escHtml(j.job_number)}${j.description ? ' — ' + escHtml(j.description) : ''}</option>`).join('')}
           </select>
         </label>
+        <span class="flagged-job-desc hint"></span>
         <label class="flagged-label">Task
           <select class="flagged-task-select">
             <option value="${escHtml(entry.task_name)}" data-category="" selected>${escHtml(entry.task_name)}${entry.bad_task ? ' (current — invalid)' : ''}</option>
             ${active_tasks.map(t => `<option value="${escHtml(t.name)}" data-category="${escHtml(t.category)}">${escHtml(t.name)}</option>`).join('')}
           </select>
         </label>
-        ${entry.description ? `<span class="flagged-desc">${escHtml(entry.description)}</span>` : ''}
       </div>
       <div class="item-actions">
         <button class="btn btn-sm btn-primary save-flagged-btn">Save</button>
       </div>
       <div class="flagged-msg hidden"></div>`;
 
-    const jobSel  = div.querySelector('.flagged-job-select');
-    const taskSel = div.querySelector('.flagged-task-select');
-    const saveBtn = div.querySelector('.save-flagged-btn');
-    const msgEl   = div.querySelector('.flagged-msg');
+    const jobSel   = div.querySelector('.flagged-job-select');
+    const jobDescEl = div.querySelector('.flagged-job-desc');
+    const taskSel  = div.querySelector('.flagged-task-select');
+    const saveBtn  = div.querySelector('.save-flagged-btn');
+    const msgEl    = div.querySelector('.flagged-msg');
+
+    const updateJobDesc = () => {
+      const desc = jobSel.options[jobSel.selectedIndex]?.dataset.desc || '';
+      jobDescEl.textContent = desc;
+    };
+    jobSel.addEventListener('change', updateJobDesc);
 
     saveBtn.addEventListener('click', async () => {
       const newJob  = jobSel.value;

@@ -839,6 +839,14 @@ body {
   cursor: pointer;
 }
 .flagged-label select:focus { outline: none; border-color: var(--blue); }
+.flagged-job-desc {
+  align-self: flex-end;
+  font-size: .82rem;
+  color: var(--gray-500);
+  padding-bottom: .35rem;
+  min-width: 120px;
+  font-style: italic;
+}
 .flagged-msg { font-size: .83rem; margin-top: .15rem; }
 .flagged-msg.ok  { color: var(--green); }
 .flagged-msg.err { color: var(--red); }
