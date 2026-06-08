@@ -109,12 +109,9 @@
           </div>
         </div>
         <div class="field full-span">
-          <label>Description <span class="hint">(optional)</span></label>
-          <input type="text" id="edit-description" placeholder="Brief description of missing job…" />
-        </div>
-        <div class="field full-span" id="edit-notes-wrap">
-          <label>Task Notes <span class="hint">(required when task is Not Listed)</span></label>
-          <textarea id="edit-notes" rows="2" placeholder="Describe the task if not listed above…"></textarea>
+          <label id="edit-combined-notes-label">Notes <span class="hint">(optional)</span></label>
+          <textarea id="edit-combined-notes" rows="2"
+                    placeholder="Any additional notes…"></textarea>
         </div>
       </div>
       <div id="edit-error" class="error-msg hidden"></div>
@@ -337,17 +334,9 @@
         </div>
 
         <div class="field full-span">
-          <label for="description">Description <span class="hint">(optional)</span></label>
-          <input type="text" id="description"
-                 placeholder="Brief description of missing invoice…" />
-        </div>
-
-        <div class="field full-span hidden" id="notes-wrap">
-          <label for="notes">Task Notes <span class="required">*</span>
-            <span class="hint">(required when task is Not Listed)</span>
-          </label>
-          <textarea id="notes" rows="2"
-                    placeholder="Describe the task if not listed above…"></textarea>
+          <label id="combined-notes-label" for="combined-notes">Notes <span class="hint">(optional)</span></label>
+          <textarea id="combined-notes" rows="2"
+                    placeholder="Any additional notes…"></textarea>
         </div>
 
       </div>
