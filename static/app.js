@@ -98,13 +98,22 @@ function renderJobTags() {
   input.style.display = hasShop ? 'none' : '';
   $('split-job-wrap').style.display = state.selectedJobs.length >= 2 ? '' : 'none';
 
-  // Require description when "Not Listed" job is selected
-  const hasNotListed = state.selectedJobs.some(j => j.job_number === 'Not Listed');
-  const descLabel = document.querySelector('label[for="description"]');
-  if (descLabel) {
-    descLabel.innerHTML = hasNotListed
-      ? 'Description <span class="required">*</span> <span class="hint">(required — note the actual invoice/job name)</span>'
-      : 'Description <span class="hint">(optional)</span>';
+  const hasNotListedJob = state.selectedJobs.some(j => j.job_number === 'Not Listed');
+  updateCombinedLabel('combined-notes-label', hasNotListedJob,
+    ($('task-input') && $('task-input').value.trim()) === 'Not Listed');
+}
+
+function updateCombinedLabel(labelId, notListedJob, notListedTask) {
+  const el = $(labelId);
+  if (!el) return;
+  if (notListedJob && notListedTask) {
+    el.innerHTML = 'Describe the invoice and task <span class="required">*</span>';
+  } else if (notListedJob) {
+    el.innerHTML = 'What was the invoice / job? <span class="required">*</span>';
+  } else if (notListedTask) {
+    el.innerHTML = 'What was the task? <span class="required">*</span>';
+  } else {
+    el.innerHTML = 'Notes <span class="hint">(optional)</span>';
   }
 }
 
@@ -240,7 +249,9 @@ function initCombos() {
     onSelect: t => {
       $('task-input').value = t.name;
       $('category').value   = t.category;
-      $('notes-wrap').classList.toggle('hidden', t.name !== 'Not Listed');
+      updateCombinedLabel('combined-notes-label',
+        state.selectedJobs.some(j => j.job_number === 'Not Listed'),
+        t.name === 'Not Listed');
     },
   });
 
@@ -251,7 +262,12 @@ function initCombos() {
     getLabel: j => j.job_number,
     getSub:   j => j.description || '',
     getSearch: j => `${j.job_number} ${j.description || ''}`,
-    onSelect: j => { $('edit-job-input').value = j.job_number; },
+    onSelect: j => {
+      $('edit-job-input').value = j.job_number;
+      updateCombinedLabel('edit-combined-notes-label',
+        j.job_number === 'Not Listed',
+        $('edit-task-input').value.trim() === 'Not Listed');
+    },
   });
 
   editTaskCombo = makeCombo({
@@ -264,7 +280,9 @@ function initCombos() {
     onSelect: t => {
       $('edit-task-input').value = t.name;
       $('edit-category').value   = t.category;
-      $('edit-notes-wrap').classList.toggle('hidden', t.name !== 'Not Listed');
+      updateCombinedLabel('edit-combined-notes-label',
+        $('edit-job-input').value.trim() === 'Not Listed',
+        t.name === 'Not Listed');
     },
   });
 }
@@ -410,7 +428,9 @@ async function loadTasks() {
       onSelect: t => {
         $('task-input').value = t.name;
         $('category').value   = t.category;
-        $('notes-wrap').classList.toggle('hidden', t.name !== 'Not Listed');
+        updateCombinedLabel('combined-notes-label',
+          state.selectedJobs.some(j => j.job_number === 'Not Listed'),
+          t.name === 'Not Listed');
       },
     });
     editTaskCombo = makeCombo({
@@ -420,7 +440,9 @@ async function loadTasks() {
       onSelect: t => {
         $('edit-task-input').value = t.name;
         $('edit-category').value   = t.category;
-        $('edit-notes-wrap').classList.toggle('hidden', t.name !== 'Not Listed');
+        updateCombinedLabel('edit-combined-notes-label',
+          $('edit-job-input').value.trim() === 'Not Listed',
+          t.name === 'Not Listed');
       },
     });
   }
@@ -445,11 +467,10 @@ function clearForm() {
   $('job-input').value    = '';
   $('task-input').value   = '';
   $('category').value     = '';
-  $('hours').value        = '';
-  $('description').value  = '';
-  $('notes').value        = '';
-  $('notes-wrap').classList.add('hidden');
-  $('split-job').checked  = false;
+  $('hours').value              = '';
+  $('combined-notes').value     = '';
+  updateCombinedLabel('combined-notes-label', false, false);
+  $('split-job').checked        = false;
   $('entry-error').classList.add('hidden');
   $('entry-success').classList.add('hidden');
 }
@@ -459,21 +480,26 @@ $('clear-btn').addEventListener('click', clearForm);
 $('submit-btn').addEventListener('click', async () => {
   const err = $('entry-error');
   err.classList.add('hidden');
-  const taskName  = $('task-input').value.trim();
-  const category  = $('category').value.trim();
-  const hours     = parseFloat($('hours').value);
-  const desc      = $('description').value.trim();
-  const notes     = $('notes').value.trim();
-  const entryDate = $('entry-date').value;
-  const split     = $('split-job').checked;
+  const taskName       = $('task-input').value.trim();
+  const category       = $('category').value.trim();
+  const hours          = parseFloat($('hours').value);
+  const combined       = $('combined-notes').value.trim();
+  const entryDate      = $('entry-date').value;
+  const split          = $('split-job').checked;
+  const notListedJob   = state.selectedJobs.some(j => j.job_number === 'Not Listed');
+  const notListedTask  = taskName === 'Not Listed';
 
   if (!state.selectedJobs.length) { showMsg(err, 'Please select a Job / Invoice from the list.'); return; }
   if (!taskName)  { showMsg(err, 'Please select a task.'); return; }
   if (!category)  { showMsg(err, 'Category could not be determined. Please re-select the task.'); return; }
   if (!hours || hours <= 0) { showMsg(err, 'Please enter a valid number of hours.'); return; }
-  if (taskName === 'Not Listed' && !notes) { showMsg(err, 'Please describe the task in the Notes field.'); return; }
-  const hasNotListedJob = state.selectedJobs.some(j => j.job_number === 'Not Listed');
-  if (hasNotListedJob && !desc) { showMsg(err, 'Please enter a description to identify the actual invoice/job.'); return; }
+  if ((notListedJob || notListedTask) && !combined) {
+    showMsg(err, notListedJob && notListedTask
+      ? 'Please describe both the invoice and the task in the Notes field.'
+      : notListedJob ? 'Please identify the actual invoice / job in the Notes field.'
+                     : 'Please describe the task in the Notes field.');
+    return;
+  }
 
   const jobHours = split ? round2(hours / state.selectedJobs.length) : hours;
 
@@ -482,13 +508,13 @@ $('submit-btn').addEventListener('click', async () => {
       api('POST', '/api/entries', {
         employee_id: state.employeeId,
         pin: state.pin,
-        entry_date: entryDate,
-        job_number: j.job_number,
-        task_name:  taskName,
+        entry_date:  entryDate,
+        job_number:  j.job_number,
+        task_name:   taskName,
         category,
-        hours: jobHours,
-        description: desc,
-        notes,
+        hours:       jobHours,
+        description: combined,
+        notes:       combined,
       })
     ));
     showMsg($('entry-success'), 'Entry saved successfully!', 'success');
@@ -558,48 +584,56 @@ $('refresh-btn').addEventListener('click', loadEntries);
 function openEditModal(id) {
   const entry = state.entries.find(e => e.id === id);
   if (!entry) return;
-  $('edit-entry-id').value     = id;
-  $('edit-date').value         = entry.entry_date;
-  $('edit-job-input').value    = entry.job_number;
-  $('edit-task-input').value   = entry.task_name;
-  $('edit-category').value     = entry.category;
-  $('edit-hours').value        = entry.hours;
-  $('edit-description').value  = entry.description || '';
-  $('edit-notes').value        = entry.notes || '';
-  $('edit-notes-wrap').classList.toggle('hidden', entry.task_name !== 'Not Listed');
+  $('edit-entry-id').value          = id;
+  $('edit-date').value              = entry.entry_date;
+  $('edit-job-input').value         = entry.job_number;
+  $('edit-task-input').value        = entry.task_name;
+  $('edit-category').value          = entry.category;
+  $('edit-hours').value             = entry.hours;
+  $('edit-combined-notes').value    = entry.notes || entry.description || '';
   $('edit-error').classList.add('hidden');
+  updateCombinedLabel('edit-combined-notes-label',
+    entry.job_number === 'Not Listed',
+    entry.task_name  === 'Not Listed');
   showOverlay('edit-overlay');
 }
 
 $('edit-cancel-btn').addEventListener('click', () => hideOverlay('edit-overlay'));
 
 $('edit-save-btn').addEventListener('click', async () => {
-  const id        = parseInt($('edit-entry-id').value);
-  const jobNumber = $('edit-job-input').value.trim();
-  const taskName  = $('edit-task-input').value.trim();
-  const category  = $('edit-category').value.trim();
-  const hours     = parseFloat($('edit-hours').value);
-  const desc      = $('edit-description').value.trim();
-  const notes     = $('edit-notes').value.trim();
-  const entryDate = $('edit-date').value;
+  const id           = parseInt($('edit-entry-id').value);
+  const jobNumber    = $('edit-job-input').value.trim();
+  const taskName     = $('edit-task-input').value.trim();
+  const category     = $('edit-category').value.trim();
+  const hours        = parseFloat($('edit-hours').value);
+  const combined     = $('edit-combined-notes').value.trim();
+  const entryDate    = $('edit-date').value;
+  const notListedJob  = jobNumber === 'Not Listed';
+  const notListedTask = taskName  === 'Not Listed';
   const err = $('edit-error');
   err.classList.add('hidden');
 
   if (!jobNumber) { showMsg(err, 'Job number required.'); return; }
   if (!taskName)  { showMsg(err, 'Task required.'); return; }
   if (!hours || hours <= 0) { showMsg(err, 'Valid hours required.'); return; }
+  if ((notListedJob || notListedTask) && !combined) {
+    showMsg(err, notListedJob && notListedTask
+      ? 'Please describe both the invoice and the task.'
+      : notListedJob ? 'Please identify the actual invoice / job.' : 'Please describe the task.');
+    return;
+  }
 
   try {
     await api('PUT', `/api/entries/${id}`, {
       employee_id: state.employeeId,
       pin: state.pin,
-      entry_date: entryDate,
-      job_number: jobNumber,
-      task_name: taskName,
+      entry_date:  entryDate,
+      job_number:  jobNumber,
+      task_name:   taskName,
       category,
       hours,
-      description: desc,
-      notes,
+      description: combined,
+      notes:       combined,
     });
     hideOverlay('edit-overlay');
     await loadEntries();
