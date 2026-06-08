@@ -1260,9 +1260,10 @@ async function loadFlaggedEntries() {
           </select>
         </label>
       </div>
-      <div class="field" style="width:100%">
-        <label id="${notesLabelId}"></label>
-        <textarea class="flagged-combined-notes" rows="2">${escHtml(prefillNotes)}</textarea>
+      <div class="flagged-notes-wrap ${entry.bad_task ? '' : 'hidden'}">
+        <label class="flagged-label" style="width:100%">Notes <span class="required">*</span>
+          <textarea class="flagged-notes-input" rows="2" placeholder="Describe what the task actually was…">${escHtml(entry.notes || '')}</textarea>
+        </label>
       </div>
       <div class="item-actions">
         <button class="btn btn-sm btn-primary save-flagged-btn">Save</button>
@@ -1274,9 +1275,14 @@ async function loadFlaggedEntries() {
 
     const jobDescEl   = div.querySelector('.flagged-job-desc');
     const taskSel     = div.querySelector('.flagged-task-select');
-    const notesEl     = div.querySelector('.flagged-combined-notes');
+    const notesWrap   = div.querySelector('.flagged-notes-wrap');
+    const notesInput  = div.querySelector('.flagged-notes-input');
     const saveBtn     = div.querySelector('.save-flagged-btn');
     const msgEl       = div.querySelector('.flagged-msg');
+
+    taskSel.addEventListener('change', () => {
+      notesWrap.classList.toggle('hidden', taskSel.value !== 'Not Listed');
+    });
 
     // Track selected job and set initial label
     let selectedJobNumber = entry.bad_job ? null : entry.job_number;
@@ -1327,15 +1333,15 @@ async function loadFlaggedEntries() {
       const newNotes   = notesEl.value.trim();
       const needsNotes = newJob === 'Not Listed' || newTask === 'Not Listed';
 
+      const newNotes = notesInput.value.trim();
+
       if (!newJob) {
         msgEl.textContent = 'Please select a job from the list.';
         msgEl.className = 'flagged-msg err';
         return;
       }
-      if (needsNotes && !newNotes) {
-        msgEl.textContent = newJob === 'Not Listed' && newTask === 'Not Listed'
-          ? 'Please describe both the invoice and the task.'
-          : newJob === 'Not Listed' ? 'Please identify the actual invoice / job.' : 'Please describe the task.';
+      if (newTask === 'Not Listed' && !newNotes) {
+        msgEl.textContent = 'Please describe the task in the Notes field.';
         msgEl.className = 'flagged-msg err';
         return;
       }
@@ -1351,7 +1357,7 @@ async function loadFlaggedEntries() {
           task_name:   newTask,
           category:    newCat,
           hours:       entry.hours,
-          description: newNotes || entry.description,
+          description: entry.description,
           notes:       newNotes || entry.notes,
         });
         msgEl.textContent = 'Saved.';
