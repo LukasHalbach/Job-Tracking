@@ -337,9 +337,17 @@
         </div>
 
         <div class="field full-span">
-          <label id="combined-notes-label" for="combined-notes">Notes <span class="hint">(optional)</span></label>
-          <textarea id="combined-notes" rows="2"
-                    placeholder="Any additional notes…"></textarea>
+          <label for="description">Description <span class="hint">(optional)</span></label>
+          <input type="text" id="description"
+                 placeholder="Brief description of missing invoice…" />
+        </div>
+
+        <div class="field full-span hidden" id="notes-wrap">
+          <label for="notes">Task Notes <span class="required">*</span>
+            <span class="hint">(required when task is Not Listed)</span>
+          </label>
+          <textarea id="notes" rows="2"
+                    placeholder="Describe the task if not listed above…"></textarea>
         </div>
 
       </div>
