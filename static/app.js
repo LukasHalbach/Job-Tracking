@@ -820,16 +820,24 @@ $('import-csv-btn').addEventListener('click', async () => {
   form.append('file', file);
   form.append('employee_id', state.employeeId);
   form.append('pin', state.pin);
+  if ($('csv-deactivate-missing').checked) form.append('deactivate_missing', '1');
 
   try {
     const res = await fetch('/api/jobs/import', { method: 'POST', body: form });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-    result.textContent = `Done — ${data.added} job${data.added !== 1 ? 's' : ''} added, ${data.skipped} skipped (already exist or blank).`;
+    const parts = [`${data.added} added`];
+    if (data.reactivated) parts.push(`${data.reactivated} reactivated`);
+    if (data.updated) parts.push(`${data.updated} updated`);
+    if (data.deactivated) parts.push(`${data.deactivated} deactivated`);
+    if (data.unchanged) parts.push(`${data.unchanged} unchanged`);
+    if (data.skipped) parts.push(`${data.skipped} skipped`);
+    result.textContent = `Done — ${parts.join(', ')}.`;
     result.className = 'ok';
     $('csv-file-input').value = '';
     $('csv-file-name').textContent = 'Choose CSV file…';
     $('import-csv-btn').disabled = true;
+    $('csv-deactivate-missing').checked = false;
     await Promise.all([loadAdminJobs(), loadJobs()]);
   } catch (e) {
     result.textContent = e.message;

@@ -333,8 +333,14 @@ def import_jobs_csv():
         return jsonify({"error": "Could not find an invoice/job number column. "
                         "Expected a column named: Invoice, Invoice Number, or Job Number"}), 400
 
+    sync_mode = request.form.get("deactivate_missing") in ("1", "true", "on")
+
     added = 0
+    reactivated = 0
+    updated = 0
+    unchanged = 0
     skipped = 0
+    seen_numbers = set()
     with get_db() as conn:
         for row in reader:
             number = (row.get(number_col) or "").strip()
@@ -342,15 +348,35 @@ def import_jobs_csv():
             if not number:
                 skipped += 1
                 continue
-            existing = conn.execute(
-                "SELECT id, is_system FROM jobs WHERE job_number=?", (number,)
-            ).fetchone()
-            if existing:
-                skipped += 1
-                continue
             # Never import a row that would shadow a system job name
             if number.lower() == 'shop':
                 skipped += 1
+                continue
+            seen_numbers.add(number)
+            existing = conn.execute(
+                "SELECT id, is_system, active, description FROM jobs WHERE job_number=?",
+                (number,),
+            ).fetchone()
+            if existing:
+                if existing["is_system"]:
+                    skipped += 1
+                    continue
+                # A blank description in the file never wipes an existing one
+                new_desc = desc or existing["description"]
+                if not existing["active"]:
+                    conn.execute(
+                        "UPDATE jobs SET active=1, description=? WHERE id=?",
+                        (new_desc, existing["id"]),
+                    )
+                    reactivated += 1
+                elif new_desc != existing["description"]:
+                    conn.execute(
+                        "UPDATE jobs SET description=? WHERE id=?",
+                        (new_desc, existing["id"]),
+                    )
+                    updated += 1
+                else:
+                    unchanged += 1
                 continue
             conn.execute(
                 "INSERT INTO jobs (job_number, description) VALUES (?, ?)",
@@ -358,7 +384,22 @@ def import_jobs_csv():
             )
             added += 1
 
-    return jsonify({"added": added, "skipped": skipped})
+        deactivated = 0
+        if sync_mode:
+            if not seen_numbers:
+                return jsonify({"error": "No valid rows found in the file — "
+                                "nothing was deactivated."}), 400
+            placeholders = ",".join("?" * len(seen_numbers))
+            cur = conn.execute(
+                f"UPDATE jobs SET active=0 WHERE active=1 AND is_system=0 "
+                f"AND job_number NOT IN ({placeholders})",
+                tuple(seen_numbers),
+            )
+            deactivated = cur.rowcount
+
+    return jsonify({"added": added, "reactivated": reactivated,
+                    "updated": updated, "unchanged": unchanged,
+                    "deactivated": deactivated, "skipped": skipped})
 
 
 @app.route("/api/tasks", methods=["GET"])
@@ -776,10 +817,12 @@ def export_excel():
 
     query = """
         SELECT te.entry_date, e.name as employee_name, te.job_number,
+               j.description as job_description,
                te.task_name, te.category, te.hours, te.description, te.notes,
                te.created_at, te.updated_at
         FROM time_entries te
         JOIN employees e ON te.employee_id = e.id
+        LEFT JOIN jobs j ON te.job_id = j.id
         WHERE 1=1
     """
     params = []
@@ -805,9 +848,9 @@ def export_excel():
     thin = Side(style="thin", color="CCCCCC")
     border = Border(left=thin, right=thin, top=thin, bottom=thin)
 
-    headers = ["Date", "Employee", "Job / Invoice #", "Task", "Category",
-               "Hours", "Description", "Notes"]
-    col_widths = [12, 20, 18, 30, 25, 8, 35, 35]
+    headers = ["Date", "Employee", "Job / Invoice #", "Job Description", "Task",
+               "Category", "Hours", "Description", "Notes"]
+    col_widths = [12, 20, 18, 30, 30, 25, 8, 35, 35]
 
     for col, (header, width) in enumerate(zip(headers, col_widths), 1):
         cell = ws.cell(row=1, column=col, value=header)
@@ -827,6 +870,7 @@ def export_excel():
             row["entry_date"],
             row["employee_name"],
             row["job_number"],
+            row["job_description"],
             row["task_name"],
             row["category"],
             row["hours"],
@@ -841,7 +885,7 @@ def export_excel():
                 cell.fill = fill
 
     ws.freeze_panes = "A2"
-    ws.auto_filter.ref = f"A1:H{max(len(rows) + 1, 2)}"
+    ws.auto_filter.ref = f"A1:I{max(len(rows) + 1, 2)}"
 
     # Summary sheet
     ws2 = wb.create_sheet("Summary by Employee")
