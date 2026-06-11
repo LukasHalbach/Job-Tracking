@@ -188,6 +188,11 @@
             </label>
             <button class="btn btn-primary" id="import-csv-btn" disabled>Import</button>
           </div>
+          <label class="csv-sync-option">
+            <input type="checkbox" id="csv-deactivate-missing" />
+            Deactivate active jobs not in this file
+            <span class="hint"> — use when importing your full list of active invoices</span>
+          </label>
           <div id="csv-result" class="hidden"></div>
         </div>
         <div class="admin-list" id="jobs-list"></div>

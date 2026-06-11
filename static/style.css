@@ -619,6 +619,15 @@ body {
   font-size: .8rem;
 }
 .csv-upload-row { display: flex; gap: .5rem; align-items: center; }
+.csv-sync-option {
+  display: flex;
+  gap: .4rem;
+  align-items: center;
+  font-size: .85rem;
+  color: var(--gray-600);
+  cursor: pointer;
+}
+.csv-sync-option input { accent-color: var(--green-600, #1E5C1E); }
 .file-label {
   flex: 1;
   display: flex;
