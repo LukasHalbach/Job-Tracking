@@ -175,6 +175,12 @@ def init_db():
         except Exception:
             pass
 
+        # Migrate: add customer column to jobs if not present
+        try:
+            conn.execute("ALTER TABLE jobs ADD COLUMN customer TEXT DEFAULT ''")
+        except Exception:
+            pass
+
         # Seed a default admin if no employees exist
         count = conn.execute("SELECT COUNT(*) FROM employees").fetchone()[0]
         if count == 0:
@@ -270,8 +276,8 @@ def add_job():
         return jsonify({"error": "Job number required"}), 400
     with get_db() as conn:
         cur = conn.execute(
-            "INSERT INTO jobs (job_number, description) VALUES (?, ?)",
-            (job_number, data.get("description", "")),
+            "INSERT INTO jobs (job_number, description, customer) VALUES (?, ?, ?)",
+            (job_number, data.get("description", ""), data.get("customer", "")),
         )
         return jsonify({"id": cur.lastrowid, "job_number": job_number}), 201
 
@@ -283,8 +289,8 @@ def update_job(job_id):
         return jsonify({"error": "Unauthorized"}), 403
     with get_db() as conn:
         conn.execute(
-            "UPDATE jobs SET job_number=?, description=?, active=? WHERE id=?",
-            (data["job_number"], data.get("description", ""), int(data.get("active", 1)), job_id),
+            "UPDATE jobs SET job_number=?, description=?, customer=?, active=? WHERE id=?",
+            (data["job_number"], data.get("description", ""), data.get("customer", ""), int(data.get("active", 1)), job_id),
         )
     return jsonify({"ok": True})
 
@@ -322,12 +328,15 @@ def import_jobs_csv():
 
     # Accept flexible column names
     headers = [h.strip().lower() for h in (reader.fieldnames or [])]
-    number_col = next((h for h in reader.fieldnames or []
-                       if h.strip().lower() in ("invoice", "invoice number",
-                                                "job number", "job", "number")), None)
-    desc_col   = next((h for h in reader.fieldnames or []
-                       if h.strip().lower() in ("title", "description",
-                                                "desc", "name")), None)
+    number_col   = next((h for h in reader.fieldnames or []
+                         if h.strip().lower() in ("invoice", "invoice number",
+                                                  "job number", "job", "number")), None)
+    desc_col     = next((h for h in reader.fieldnames or []
+                         if h.strip().lower() in ("title", "description",
+                                                  "desc", "name")), None)
+    customer_col = next((h for h in reader.fieldnames or []
+                         if h.strip().lower() in ("customer", "client",
+                                                  "customer name", "client name")), None)
 
     if not number_col:
         return jsonify({"error": "Could not find an invoice/job number column. "
@@ -343,8 +352,9 @@ def import_jobs_csv():
     seen_numbers = set()
     with get_db() as conn:
         for row in reader:
-            number = (row.get(number_col) or "").strip()
-            desc   = (row.get(desc_col)   or "").strip() if desc_col else ""
+            number   = (row.get(number_col)   or "").strip()
+            desc     = (row.get(desc_col)     or "").strip() if desc_col     else ""
+            customer = (row.get(customer_col) or "").strip() if customer_col else ""
             if not number:
                 skipped += 1
                 continue
@@ -354,33 +364,34 @@ def import_jobs_csv():
                 continue
             seen_numbers.add(number)
             existing = conn.execute(
-                "SELECT id, is_system, active, description FROM jobs WHERE job_number=?",
+                "SELECT id, is_system, active, description, customer FROM jobs WHERE job_number=?",
                 (number,),
             ).fetchone()
             if existing:
                 if existing["is_system"]:
                     skipped += 1
                     continue
-                # A blank description in the file never wipes an existing one
-                new_desc = desc or existing["description"]
+                # A blank value in the file never wipes an existing one
+                new_desc     = desc     or existing["description"]
+                new_customer = customer or existing["customer"]
                 if not existing["active"]:
                     conn.execute(
-                        "UPDATE jobs SET active=1, description=? WHERE id=?",
-                        (new_desc, existing["id"]),
+                        "UPDATE jobs SET active=1, description=?, customer=? WHERE id=?",
+                        (new_desc, new_customer, existing["id"]),
                     )
                     reactivated += 1
-                elif new_desc != existing["description"]:
+                elif new_desc != existing["description"] or new_customer != existing["customer"]:
                     conn.execute(
-                        "UPDATE jobs SET description=? WHERE id=?",
-                        (new_desc, existing["id"]),
+                        "UPDATE jobs SET description=?, customer=? WHERE id=?",
+                        (new_desc, new_customer, existing["id"]),
                     )
                     updated += 1
                 else:
                     unchanged += 1
                 continue
             conn.execute(
-                "INSERT INTO jobs (job_number, description) VALUES (?, ?)",
-                (number, desc),
+                "INSERT INTO jobs (job_number, description, customer) VALUES (?, ?, ?)",
+                (number, desc, customer),
             )
             added += 1
 
@@ -469,7 +480,8 @@ def list_entries():
     all_employees = request.args.get("all_employees") == "1"
 
     query = """
-        SELECT te.*, e.name as employee_name, j.description as job_description
+        SELECT te.*, e.name as employee_name,
+               j.description as job_description, j.customer as job_customer
         FROM time_entries te
         JOIN employees e ON te.employee_id = e.id
         LEFT JOIN jobs j ON te.job_id = j.id
@@ -789,7 +801,7 @@ def admin_flagged_entries():
         """).fetchall()
 
         active_jobs  = conn.execute(
-            "SELECT job_number, description FROM jobs WHERE active=1 ORDER BY job_number"
+            "SELECT job_number, description, customer FROM jobs WHERE active=1 ORDER BY job_number"
         ).fetchall()
         active_tasks = conn.execute(
             "SELECT name, category FROM tasks WHERE active=1 ORDER BY name"
@@ -797,7 +809,7 @@ def admin_flagged_entries():
 
     return jsonify({
         "entries": [dict(r) for r in rows],
-        "active_jobs":  [{"job_number": r["job_number"], "description": r["description"] or ""} for r in active_jobs],
+        "active_jobs":  [{"job_number": r["job_number"], "description": r["description"] or "", "customer": r["customer"] or ""} for r in active_jobs],
         "active_tasks": [{"name": r["name"], "category": r["category"]} for r in active_tasks],
     })
 
@@ -817,7 +829,7 @@ def export_excel():
 
     query = """
         SELECT te.entry_date, e.name as employee_name, te.job_number,
-               j.description as job_description,
+               j.customer as job_customer, j.description as job_description,
                te.task_name, te.category, te.hours, te.description, te.notes,
                te.created_at, te.updated_at
         FROM time_entries te
@@ -848,9 +860,9 @@ def export_excel():
     thin = Side(style="thin", color="CCCCCC")
     border = Border(left=thin, right=thin, top=thin, bottom=thin)
 
-    headers = ["Date", "Employee", "Job / Invoice #", "Job Description", "Task",
+    headers = ["Date", "Employee", "Job / Invoice #", "Customer", "Job Title / Description", "Task",
                "Category", "Hours", "Description", "Notes"]
-    col_widths = [12, 20, 18, 30, 30, 25, 8, 35, 35]
+    col_widths = [12, 20, 18, 22, 30, 30, 25, 8, 35, 35]
 
     for col, (header, width) in enumerate(zip(headers, col_widths), 1):
         cell = ws.cell(row=1, column=col, value=header)
@@ -870,6 +882,7 @@ def export_excel():
             row["entry_date"],
             row["employee_name"],
             row["job_number"],
+            row["job_customer"],
             row["job_description"],
             row["task_name"],
             row["category"],
@@ -885,7 +898,7 @@ def export_excel():
                 cell.fill = fill
 
     ws.freeze_panes = "A2"
-    ws.auto_filter.ref = f"A1:I{max(len(rows) + 1, 2)}"
+    ws.auto_filter.ref = f"A1:J{max(len(rows) + 1, 2)}"
 
     # Summary sheet
     ws2 = wb.create_sheet("Summary by Employee")
