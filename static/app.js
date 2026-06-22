@@ -220,8 +220,8 @@ function initCombos() {
     listId:  'job-list',
     items:   state.jobs,
     getLabel: j => j.job_number,
-    getSub:   j => [j.customer, j.description].filter(Boolean).join(' — '),
-    getSearch: j => `${j.job_number} ${j.customer || ''} ${j.description || ''}`,
+    getSub:   j => j.description || '',
+    getSearch: j => `${j.job_number} ${j.description || ''}`,
     clearOnFocus: true,
     setInputOnSelect: false,
     onSelect: j => {
@@ -260,8 +260,8 @@ function initCombos() {
     listId:  'edit-job-list',
     items:   state.jobs,
     getLabel: j => j.job_number,
-    getSub:   j => [j.customer, j.description].filter(Boolean).join(' — '),
-    getSearch: j => `${j.job_number} ${j.customer || ''} ${j.description || ''}`,
+    getSub:   j => j.description || '',
+    getSearch: j => `${j.job_number} ${j.description || ''}`,
     onSelect: j => {
       $('edit-job-input').value = j.job_number;
       updateCombinedLabel('edit-combined-notes-label',
@@ -390,9 +390,8 @@ async function loadJobs() {
     editJobCombo.destroy();
     jobCombo = makeCombo({
       inputId: 'job-input', listId: 'job-list',
-      items: state.jobs, getLabel: j => j.job_number,
-      getSub: j => [j.customer, j.description].filter(Boolean).join(' — '),
-      getSearch: j => `${j.job_number} ${j.customer || ''} ${j.description || ''}`,
+      items: state.jobs, getLabel: j => j.job_number, getSub: j => j.description || '',
+      getSearch: j => `${j.job_number} ${j.description || ''}`,
       clearOnFocus: true, setInputOnSelect: false,
       onSelect: j => {
         if (j.job_number === 'Shop') {
@@ -410,9 +409,8 @@ async function loadJobs() {
     });
     editJobCombo = makeCombo({
       inputId: 'edit-job-input', listId: 'edit-job-list',
-      items: state.jobs, getLabel: j => j.job_number,
-      getSub: j => [j.customer, j.description].filter(Boolean).join(' — '),
-      getSearch: j => `${j.job_number} ${j.customer || ''} ${j.description || ''}`,
+      items: state.jobs, getLabel: j => j.job_number, getSub: j => j.description || '',
+      getSearch: j => `${j.job_number} ${j.description || ''}`,
       onSelect: j => { $('edit-job-input').value = j.job_number; },
     });
   }
@@ -545,10 +543,9 @@ function renderEntries() {
   let total = 0;
   state.entries.forEach(e => {
     total += e.hours;
-    const jobParts = [e.job_number];
-    if (e.job_customer) jobParts.push(e.job_customer);
-    if (e.job_description) jobParts.push(e.job_description);
-    const jobDisplay = jobParts.join(' — ');
+    const jobDisplay = e.job_description
+      ? `${e.job_number} — ${e.job_description}`
+      : e.job_number;
     const empCell = state.isAdmin
       ? `<td class="entry-employee">${escHtml(e.employee_name)}</td>`
       : '';
@@ -745,10 +742,9 @@ async function loadAdminJobs() {
            Delete
          </button>`
       : '';
-    const metaParts = [j.customer, j.description].filter(Boolean);
     div.innerHTML = `
       <span class="item-name">${nameHtml}</span>
-      <span class="item-meta">${metaParts.join(' — ')}</span>
+      <span class="item-meta">${j.description || ''}</span>
       <div class="item-actions">
         <button class="toggle-btn ${j.active ? 'active' : 'inactive'}"
                 data-id="${j.id}" data-active="${j.active}">
@@ -777,21 +773,19 @@ async function loadAdminJobs() {
       const div = btn.closest('.admin-item');
       div.innerHTML = `
         <input class="edit-inline-input" value="${job.job_number}" placeholder="Invoice #" style="min-width:90px;flex:1" />
-        <input class="edit-inline-input" value="${job.customer || ''}" placeholder="Customer" style="flex:1.5" />
-        <input class="edit-inline-input" value="${job.description || ''}" placeholder="Job Title / Description" style="flex:2" />
+        <input class="edit-inline-input" value="${job.description || ''}" placeholder="Description" style="flex:2" />
         <div class="item-actions">
           <button class="btn btn-sm btn-primary save-inline-btn">Save</button>
           <button class="btn btn-sm btn-secondary cancel-inline-btn">Cancel</button>
         </div>`;
       div.querySelector('.save-inline-btn').addEventListener('click', async () => {
         const inputs = div.querySelectorAll('.edit-inline-input');
-        const newNum      = inputs[0].value.trim();
-        const newCustomer = inputs[1].value.trim();
-        const newDesc     = inputs[2].value.trim();
+        const newNum = inputs[0].value.trim();
+        const newDesc = inputs[1].value.trim();
         if (!newNum) { alert('Invoice number is required.'); return; }
         await api('PUT', `/api/jobs/${job.id}`, {
           employee_id: state.employeeId, pin: state.pin,
-          job_number: newNum, customer: newCustomer, description: newDesc, active: job.active,
+          job_number: newNum, description: newDesc, active: job.active,
         });
         await Promise.all([loadAdminJobs(), loadJobs()]);
       });
@@ -852,16 +846,14 @@ $('import-csv-btn').addEventListener('click', async () => {
 });
 
 $('add-job-btn').addEventListener('click', async () => {
-  const num      = $('new-job-number').value.trim();
-  const customer = $('new-job-customer').value.trim();
-  const desc     = $('new-job-desc').value.trim();
+  const num  = $('new-job-number').value.trim();
+  const desc = $('new-job-desc').value.trim();
   if (!num) { alert('Job number is required.'); return; }
   await api('POST', '/api/jobs', {
     employee_id: state.employeeId, pin: state.pin,
-    job_number: num, customer, description: desc,
+    job_number: num, description: desc,
   });
   $('new-job-number').value = '';
-  $('new-job-customer').value = '';
   $('new-job-desc').value = '';
   await Promise.all([loadAdminJobs(), loadJobs()]);
 });
@@ -1300,13 +1292,13 @@ async function loadFlaggedEntries() {
       listId:  comboListId,
       items:   active_jobs,
       getLabel: j => j.job_number,
-      getSub:   j => [j.customer, j.description].filter(Boolean).join(' — '),
-      getSearch: j => `${j.job_number} ${j.customer || ''} ${j.description || ''}`,
+      getSub:   j => j.description || '',
+      getSearch: j => `${j.job_number} ${j.description}`,
       clearOnFocus: false,
       setInputOnSelect: true,
       onSelect: j => {
         selectedJobNumber = j.job_number;
-        jobDescEl.textContent = [j.customer, j.description].filter(Boolean).join(' — ');
+        jobDescEl.textContent = j.description || '';
       },
     });
 

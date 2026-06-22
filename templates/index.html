@@ -173,14 +173,13 @@
       <div class="tab-content active" id="tab-jobs">
         <div class="add-form">
           <input type="text" id="new-job-number" placeholder="Job / Invoice number" />
-          <input type="text" id="new-job-customer" placeholder="Customer (optional)" />
-          <input type="text" id="new-job-desc" placeholder="Job Title / Description (optional)" />
+          <input type="text" id="new-job-desc" placeholder="Title / Description (optional)" />
           <button class="btn btn-primary" id="add-job-btn">Add Job</button>
         </div>
         <div class="csv-upload-section">
           <div class="csv-upload-label">
             <strong>Bulk import from CSV</strong>
-            <span class="hint"> — columns: <code>Invoice Number</code>, <code>Customer</code> (optional), <code>Title</code> (optional)</span>
+            <span class="hint"> — two columns: <code>Invoice Number</code> and <code>Title</code></span>
           </div>
           <div class="csv-upload-row">
             <label class="file-label" for="csv-file-input">
