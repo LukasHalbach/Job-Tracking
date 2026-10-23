@@ -78,48 +78,17 @@
     </div>
     <div class="modal-body">
       <input type="hidden" id="edit-entry-id" />
-      <div class="form-grid">
-        <div class="field">
-          <label>Date</label>
-          <input type="date" id="edit-date" />
-        </div>
-        <div class="field">
-          <label>Job / Invoice # or Name</label>
-          <div class="combo-wrap">
-            <input type="text" id="edit-job-input" placeholder="Search by invoice # or name…" autocomplete="off" />
-            <ul class="combo-list hidden" id="edit-job-list"></ul>
-          </div>
-        </div>
-        <div class="field">
-          <label>Task <span class="hint">— select <strong>Not Listed</strong> if not in the list</span></label>
-          <div class="combo-wrap">
-            <input type="text" id="edit-task-input" placeholder="Search task…" autocomplete="off" />
-            <ul class="combo-list hidden" id="edit-task-list"></ul>
-          </div>
-        </div>
-        <div class="field">
-          <label>Category</label>
-          <input type="text" id="edit-category" readonly placeholder="Auto-filled from task" />
-        </div>
-        <div class="field">
-          <label>Hours</label>
-          <div class="hours-wrap">
-            <input type="number" id="edit-hours" min="0.25" max="24" step="0.25" placeholder="0.00" />
-            <div class="quick-hours" id="edit-quick-hours"></div>
-          </div>
-        </div>
-        <div class="field full-span">
-          <label id="edit-combined-notes-label">Notes <span class="hint">(optional)</span></label>
-          <textarea id="edit-combined-notes" rows="2"
-                    placeholder="Any additional notes…"></textarea>
-        </div>
-      </div>
+      <div class="form-grid" id="edit-fields"></div>
       <div id="edit-error" class="error-msg hidden"></div>
       <div class="modal-actions">
         <button class="btn btn-danger" id="edit-delete-btn">Delete Entry</button>
         <div class="spacer"></div>
         <button class="btn btn-secondary" id="edit-cancel-btn">Cancel</button>
         <button class="btn btn-primary" id="edit-save-btn">Save Changes</button>
+      </div>
+      <div class="history-block">
+        <div class="history-title">Change history</div>
+        <div id="edit-history" class="history-list"></div>
       </div>
     </div>
   </div>
@@ -129,12 +98,12 @@
 <div id="delete-confirm-overlay" class="overlay">
   <div class="modal">
     <div class="modal-header modal-header-danger">
-      <h2>Permanent Delete</h2>
+      <h2 id="delete-confirm-title">Permanent Delete</h2>
     </div>
     <div class="modal-body">
       <p id="delete-confirm-label" class="delete-confirm-label"></p>
       <div class="delete-warning">
-        <p>This <strong>cannot be undone.</strong> The record will be removed from the system permanently.</p>
+        <p>This <strong>cannot be undone</strong>, but the deletion is recorded in the History log.</p>
         <p id="delete-confirm-note"></p>
       </div>
       <div class="field" style="margin-top:1rem">
@@ -152,35 +121,62 @@
   </div>
 </div>
 
+<!-- ── Merge Customer Modal ───────────────────────────────────────────────── -->
+<div id="merge-overlay" class="overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Merge Customer</h2>
+    </div>
+    <div class="modal-body">
+      <p id="merge-label" class="delete-confirm-label"></p>
+      <p class="hint-block" style="margin-bottom:.75rem">
+        All invoices and time entries move to the customer you pick, and this
+        customer is removed. Use this to fix duplicates and typos. The merge is
+        recorded in the History log.
+      </p>
+      <div class="field">
+        <label for="merge-target">Merge into</label>
+        <select id="merge-target"></select>
+      </div>
+      <div id="merge-error" class="error-msg hidden"></div>
+      <div class="modal-actions">
+        <div class="spacer"></div>
+        <button class="btn btn-secondary" id="merge-cancel">Cancel</button>
+        <button class="btn btn-primary" id="merge-ok">Merge</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ── Admin Modal ────────────────────────────────────────────────────────── -->
 <div id="admin-overlay" class="overlay">
-  <div class="modal modal-wide">
+  <div class="modal modal-xl">
     <div class="modal-header">
       <h2>Admin Panel</h2>
       <button class="btn-close" id="admin-close-btn">✕</button>
     </div>
     <div class="modal-body">
       <div class="tab-bar">
-        <button class="tab active" data-tab="jobs">Jobs / Invoices</button>
+        <button class="tab active" data-tab="customers">Customers</button>
+        <button class="tab" data-tab="review">Needs Review <span class="tab-badge hidden" id="review-badge"></span></button>
+        <button class="tab" data-tab="history">History</button>
         <button class="tab" data-tab="tasks">Tasks</button>
         <button class="tab" data-tab="employees">Employees</button>
         <button class="tab" data-tab="roles">Roles</button>
         <button class="tab" data-tab="export">Export Data</button>
-        <button class="tab" data-tab="flagged">Flagged Entries</button>
       </div>
 
-      <!-- Jobs tab -->
-      <div class="tab-content active" id="tab-jobs">
+      <!-- Customers tab -->
+      <div class="tab-content active" id="tab-customers">
         <div class="add-form">
-          <input type="text" id="new-job-number" placeholder="Job / Invoice number" />
-          <input type="text" id="new-job-customer" placeholder="Customer (optional)" />
-          <input type="text" id="new-job-desc" placeholder="Job Title / Description (optional)" />
-          <button class="btn btn-primary" id="add-job-btn">Add Job</button>
+          <input type="text" id="new-customer-name" placeholder="Customer name" />
+          <input type="text" id="new-customer-notes" placeholder="Notes (optional)" />
+          <button class="btn btn-primary" id="add-customer-btn">Add Customer</button>
         </div>
         <div class="csv-upload-section">
           <div class="csv-upload-label">
             <strong>Bulk import from CSV</strong>
-            <span class="hint"> — columns: <code>Invoice Number</code>, <code>Customer</code> (optional), <code>Title</code> (optional)</span>
+            <span class="hint"> — one invoice per row. Columns: <code>Customer</code>, <code>Invoice Number</code> (optional), <code>Title</code> (optional)</span>
           </div>
           <div class="csv-upload-row">
             <label class="file-label" for="csv-file-input">
@@ -191,12 +187,60 @@
           </div>
           <label class="csv-sync-option">
             <input type="checkbox" id="csv-deactivate-missing" />
-            Deactivate active jobs not in this file
-            <span class="hint"> — use when importing your full list of active invoices</span>
+            Deactivate verified invoices not in this file
+            <span class="hint"> — use when importing your full list of open invoices. Invoices employees added on the fly are never deactivated by this.</span>
           </label>
           <div id="csv-result" class="hidden"></div>
         </div>
-        <div class="admin-list" id="jobs-list"></div>
+        <input type="search" id="admin-customer-search" class="list-search" placeholder="Search customers…" />
+        <div class="admin-list" id="customers-list"></div>
+      </div>
+
+      <!-- Needs Review tab -->
+      <div class="tab-content" id="tab-review">
+        <p class="hint-block" style="margin-bottom:.75rem">
+          Customers and invoices employees typed in because they weren't in the system yet,
+          plus time logged under <strong>Not Listed</strong>. Verify what's real, fix typos
+          (merge duplicates), and give Not Listed entries a proper task.
+        </p>
+        <button class="btn btn-secondary btn-sm" id="refresh-review-btn" style="margin-bottom:.75rem">Refresh</button>
+        <div id="review-body"></div>
+      </div>
+
+      <!-- History tab -->
+      <div class="tab-content" id="tab-history">
+        <div class="history-filters">
+          <input type="search" id="hist-q" placeholder="Search history…" />
+          <select id="hist-type">
+            <option value="">All types</option>
+            <option value="entry">Time entries</option>
+            <option value="customer">Customers</option>
+            <option value="invoice">Invoices</option>
+            <option value="task">Tasks</option>
+            <option value="employee">Employees</option>
+            <option value="role">Roles</option>
+            <option value="import">Imports</option>
+            <option value="system">System</option>
+          </select>
+          <select id="hist-action">
+            <option value="">All actions</option>
+            <option value="create">Created</option>
+            <option value="update">Edited</option>
+            <option value="delete">Deleted</option>
+            <option value="verify">Verified</option>
+            <option value="merge">Merged</option>
+            <option value="activate">Activated</option>
+            <option value="deactivate">Deactivated</option>
+            <option value="import">Imported</option>
+          </select>
+          <select id="hist-actor"><option value="">Anyone</option></select>
+          <input type="date" id="hist-from" title="From date" />
+          <input type="date" id="hist-to" title="To date" />
+          <button class="btn btn-secondary btn-sm" id="hist-refresh">Refresh</button>
+        </div>
+        <div id="hist-count" class="hint" style="margin:.5rem 0"></div>
+        <div id="hist-list" class="history-list history-list-full"></div>
+        <button class="btn btn-outline btn-sm hidden" id="hist-more" style="margin-top:.75rem">Load more</button>
       </div>
 
       <!-- Tasks tab -->
@@ -248,18 +292,13 @@
           <button class="btn btn-outline btn-sm" id="export-this-week-btn" style="align-self:flex-end">This Week</button>
           <button class="btn btn-primary" id="export-btn">Download Excel</button>
         </div>
-        <p class="hint-block">Defaults to the current week. Adjust the dates for a custom range, or leave both blank to export everything.</p>
-      </div>
-
-      <!-- Flagged Entries tab -->
-      <div class="tab-content" id="tab-flagged">
-        <p class="hint-block" style="margin-bottom:.75rem">
-          These entries were logged with <strong>Not Listed</strong> as the job or task — the employee didn't know the real value at the time.
-          Select the correct job and/or task for each one and save.
-        </p>
-        <button class="btn btn-secondary btn-sm" id="refresh-flagged-btn" style="margin-bottom:.75rem">Refresh</button>
-        <div id="flagged-count" class="hint" style="margin-bottom:.5rem"></div>
-        <div class="admin-list" id="flagged-list"></div>
+        <label class="csv-sync-option" style="margin-top:.75rem">
+          <input type="checkbox" id="export-include-log" checked />
+          Include the Change Log sheet
+          <span class="hint"> — every create / edit / delete in the date range</span>
+        </label>
+        <p class="hint-block">Defaults to the current week. Adjust the dates for a custom range, or leave both blank to export everything.
+          Sheets: Time Entries, Summary by Customer (with invoice subtotals), Summary by Employee.</p>
       </div>
     </div>
   </div>
@@ -273,79 +312,30 @@
       <img src="/static/logo.png" alt="TSi" class="header-logo" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'brand-logo',textContent:'TSi'}))" />
       <span class="brand-title">Job Time Tracker</span>
     </div>
+    <nav class="main-nav">
+      <button class="nav-btn active" data-view="log">Log Time</button>
+      <button class="nav-btn" data-view="customers">Customers</button>
+    </nav>
     <div class="header-user">
       <span id="header-name">—</span>
       <button class="btn btn-sm btn-outline" id="change-pin-btn">Change PIN</button>
-      <button class="btn btn-sm btn-secondary" id="admin-btn" style="display:none">Admin</button>
+      <button class="btn btn-sm btn-secondary" id="admin-btn" style="display:none">Admin <span class="tab-badge hidden" id="admin-badge"></span></button>
       <button class="btn btn-sm btn-outline" id="switch-user-btn">Switch User</button>
     </div>
   </header>
 
-  <main class="main-content">
+  <!-- ── View: Log Time ──────────────────────────────────────────────────── -->
+  <main class="main-content" id="view-log">
 
-    <!-- Entry Form -->
     <section class="card entry-card">
       <h3 class="card-title">Log Time Entry</h3>
-      <div class="form-grid">
 
-        <div class="field">
-          <label for="entry-date">Date</label>
-          <input type="date" id="entry-date" />
-        </div>
-
-        <!-- spacer to keep date half-width -->
-        <div></div>
-
-        <div class="field full-span">
-          <label>Job / Invoice # or Name <span class="required">*</span></label>
-          <div class="combo-wrap">
-            <div class="tag-field" id="job-tag-field">
-              <input type="text" id="job-input" placeholder="Search by invoice # or name…" autocomplete="off" />
-            </div>
-            <ul class="combo-list hidden" id="job-list"></ul>
-          </div>
-        </div>
-
-        <div class="field full-span" id="split-job-wrap" style="display:none">
-          <label class="checkbox-label">
-            <input type="checkbox" id="split-job" />
-            <strong>Split Job</strong> — divide hours equally between all selected jobs
-          </label>
-        </div>
-
-        <div class="field">
-          <label for="task-input">Task <span class="required">*</span>
-            <span class="hint">— if not listed, select <strong>Not Listed</strong> and describe in Notes</span>
-          </label>
-          <div class="combo-wrap">
-            <input type="text" id="task-input" placeholder="Search task…"
-                   autocomplete="off" />
-            <ul class="combo-list hidden" id="task-list"></ul>
-          </div>
-        </div>
-
-        <div class="field">
-          <label for="category">Category</label>
-          <input type="text" id="category" readonly
-                 placeholder="Auto-filled from task selection" />
-        </div>
-
-        <div class="field">
-          <label for="hours">Hours <span class="required">*</span></label>
-          <div class="hours-wrap">
-            <input type="number" id="hours" min="0.25" max="24" step="0.25"
-                   placeholder="0.00" />
-            <div class="quick-hours" id="quick-hours"></div>
-          </div>
-        </div>
-
-        <div class="field full-span">
-          <label id="combined-notes-label" for="combined-notes">Notes <span class="hint">(optional)</span></label>
-          <textarea id="combined-notes" rows="2"
-                    placeholder="Any additional notes…"></textarea>
-        </div>
-
+      <div class="recent-customers hidden" id="recent-customers">
+        <span class="recent-label">Recent:</span>
+        <span id="recent-customers-chips"></span>
       </div>
+
+      <div class="form-grid" id="entry-fields"></div>
 
       <div id="entry-error" class="error-msg hidden"></div>
       <div id="entry-success" class="success-msg hidden"></div>
@@ -356,11 +346,13 @@
       </div>
     </section>
 
-    <!-- Recent Entries -->
     <section class="card entries-card">
       <div class="entries-header">
-        <h3 class="card-title">Recent Entries</h3>
+        <h3 class="card-title" id="entries-title">Recent Entries</h3>
         <div class="entries-controls">
+          <select id="filter-customer" title="Filter by customer">
+            <option value="">All customers</option>
+          </select>
           <input type="date" id="filter-from" title="From date" />
           <span class="range-sep">–</span>
           <input type="date" id="filter-to" title="To date" />
@@ -374,12 +366,11 @@
             <tr>
               <th>Date</th>
               <th id="col-employee" class="hidden">Employee</th>
-              <th>Job</th>
+              <th>Customer</th>
+              <th>Invoice</th>
               <th>Task</th>
-              <th>Category</th>
               <th>Hrs</th>
-              <th>Description</th>
-              <th>Notes</th>
+              <th class="col-notes">Notes</th>
               <th></th>
             </tr>
           </thead>
@@ -394,8 +385,26 @@
     </section>
 
   </main>
+
+  <!-- ── View: Customers ─────────────────────────────────────────────────── -->
+  <main class="main-content hidden" id="view-customers">
+    <div class="customers-layout">
+      <section class="card customers-list-card">
+        <h3 class="card-title">Customers</h3>
+        <input type="search" id="customer-search" class="list-search" placeholder="Search customers…" />
+        <div id="customer-cards" class="customer-cards"></div>
+      </section>
+      <section class="card customer-detail-card" id="customer-detail">
+        <p class="empty-row">Select a customer to see their invoices, hours and activity.</p>
+      </section>
+    </div>
+  </main>
 </div>
 
+<script src="/static/core.js"></script>
+<script src="/static/entry.js"></script>
+<script src="/static/customers.js"></script>
+<script src="/static/admin.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>
