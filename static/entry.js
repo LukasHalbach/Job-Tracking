@@ -18,7 +18,7 @@ function createEntryFields(p, mountId, { multi }) {
     <div class="field full-span">
       <label>Customer <span class="required">*</span></label>
       <div class="combo-wrap">
-        <input type="text" id="${p}customer" placeholder="Search customers, or type a new one…" autocomplete="off" />
+        <input type="text" id="${p}customer" placeholder="Search customers…" autocomplete="off" />
         <ul class="combo-list hidden" id="${p}customer-list"></ul>
       </div>
       <div class="cust-info hidden" id="${p}cust-info"></div>
@@ -104,13 +104,15 @@ function createEntryFields(p, mountId, { multi }) {
     box.classList.remove('hidden');
     if (customer._new) {
       box.className = 'cust-info new';
-      box.textContent = 'New customer — it will be added to the system and flagged for admin review.';
+      box.textContent = state.isAdmin
+        ? 'New customer — it will be added to the system.'
+        : 'Not in the customer list. Submitting sends a request to an admin. You can log time against it now, and it is attached once the request is approved.';
       return;
     }
     const full = state.customers.find(c => c.id === customer.id) || customer;
     const parts = [];
     if (full.is_system) parts.push('Internal shop work');
-    if (full.status === 'pending') parts.push('Pending admin review');
+    if (full.status === 'pending') parts.push('Your request is awaiting admin approval');
     parts.push(`${full.invoice_count ?? customerInvoices().length} open invoice${(full.invoice_count ?? 0) === 1 ? '' : 's'}`);
     if (full.entry_count !== undefined) {
       parts.push(full.entry_count
@@ -125,14 +127,16 @@ function createEntryFields(p, mountId, { multi }) {
     inputId: `${p}customer`, listId: `${p}customer-list`,
     items: () => state.customers,
     getLabel: c => c._new || c.name,
-    getSub: c => c.is_system ? 'internal' : (c.status === 'pending' ? 'pending review'
+    getSub: c => c.is_system ? 'internal' : (c.status === 'pending' ? 'your request — awaiting approval'
               : (c.invoice_count ? `${c.invoice_count} invoice${c.invoice_count === 1 ? '' : 's'}` : '')),
     clearOnFocus: true, setInputOnSelect: false,
     extra: q => {
       const exact = state.customers.some(c => c.name.toLowerCase() === q.toLowerCase());
       return q.length >= 2 && !exact ? { _new: q.replace(/\s+/g, ' ') } : null;
     },
-    extraLabel: x => `+ Add "${x._new}" as a new customer`,
+    extraLabel: x => state.isAdmin
+      ? `+ Add "${x._new}" as a new customer`
+      : `+ Request "${x._new}" as a new customer (admin reviews)`,
     onSelect: setCustomer,
   });
 
@@ -271,6 +275,7 @@ function createEntryFields(p, mountId, { multi }) {
       if (multi) v.split = $(`${p}split`).checked;
       return v;
     },
+    hasNewCustomer() { return !!(customer && customer._new); },
     hasNewThings() {
       return !!(customer && customer._new) || invoices.some(i => i._new);
     },
@@ -300,13 +305,14 @@ $('submit-btn').addEventListener('click', async () => {
   if (problem) { showMsg(err, problem); return; }
 
   const hadNew = logFields.hasNewThings();
+  const hadNewCustomer = logFields.hasNewCustomer();
   btn.disabled = true;
   try {
     const res = await api('POST', '/api/entries', authBody(logFields.values()));
     const n = res.ids.length;
     showMsg($('entry-success'),
       `Saved ${n} entr${n === 1 ? 'y' : 'ies'}.` +
-      (hadNew ? ' New customer / invoice added and flagged for admin review.' : ''), 'success');
+      (hadNew ? (hadNewCustomer && !state.isAdmin ? ' Your customer request was sent to an admin.' : ' New invoice flagged for admin review.') : ''), 'success');
     // Keep the customer and date: people usually log several tasks in a row.
     logFields.reset({ keepCustomer: true, keepDate: true });
     await Promise.all([loadCustomers(), loadInvoices(), loadEntries(), loadRecentCustomers()]);

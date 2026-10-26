@@ -383,12 +383,14 @@ def split_hours(total, n):
 
 def resolve_customer(conn, emp, data, current_id=None):
     """Return the customer row for an entry payload. `customer_id` selects an
-    existing customer; `new_customer` names one that isn't in the system yet and
-    creates it (pending admin review unless an admin is doing the typing)."""
+    existing customer; `new_customer` names one that isn't in the system yet. For
+    employees that is a *request*: a pending customer only they can see until an
+    admin approves, renames or merges it. (Admins just create it.)"""
     cid = data.get("customer_id")
     if cid:
         row = conn.execute("SELECT * FROM customers WHERE id=?", (cid,)).fetchone()
-        if not row:
+        if not row or (row["status"] == "pending" and not emp["is_admin"]
+                       and row["created_by"] != emp["id"]):
             raise ApiError("Customer not found.")
         if not row["active"] and row["id"] != current_id:
             raise ApiError(f"'{row['name']}' is inactive. Ask an admin to reactivate it.")
@@ -410,8 +412,8 @@ def resolve_customer(conn, emp, data, current_id=None):
     )
     audit(conn, emp, "create", "customer", cur.lastrowid, name, customer_id=cur.lastrowid,
           snapshot={"name": name, "status": status},
-          note="Added on the fly while logging time" +
-               ("" if emp["is_admin"] else " — pending admin review"))
+          note="Added by an admin while logging time" if emp["is_admin"]
+               else "Customer requested while logging time — awaiting admin approval")
     return conn.execute("SELECT * FROM customers WHERE id=?", (cur.lastrowid,)).fetchone()
 
 
@@ -571,8 +573,8 @@ def list_customers():
     stats = request.args.get("stats") == "1"
     params = []
     extra = ""
+    emp = current_employee(request.args) if stats else None
     if stats:
-        emp = current_employee(request.args)
         scope = "" if emp["is_admin"] else " AND te.employee_id = ?"
         scope_params = [] if emp["is_admin"] else [emp["id"]]
         extra = f""",
@@ -583,15 +585,20 @@ def list_customers():
             (SELECT MAX(te.entry_date) FROM time_entries te
               WHERE te.customer_id = c.id{scope}) AS last_entry"""
         params = scope_params * 3
-    where = "" if show_all else "WHERE c.active = 1"
+    where = [] if show_all else ["c.active = 1"]
+    where_params = []
+    if not (emp and emp["is_admin"]):
+        # Pending requests are only visible to whoever asked for them.
+        where.append("(c.status = 'verified' OR c.created_by = ?)")
+        where_params.append(emp["id"] if emp else -1)
     with get_db() as conn:
         rows = conn.execute(f"""
             SELECT c.*,
                    (SELECT COUNT(*) FROM invoices i
                      WHERE i.customer_id = c.id AND i.active = 1) AS invoice_count{extra}
-            FROM customers c {where}
+            FROM customers c {"WHERE " + " AND ".join(where) if where else ""}
             ORDER BY c.is_system DESC, c.active DESC, c.name COLLATE NOCASE
-        """, params).fetchall()
+        """, params + where_params).fetchall()
     return jsonify([dict(r) for r in rows])
 
 
@@ -943,26 +950,37 @@ def delete_invoice(iid):
 
 @app.route("/api/customers/import", methods=["POST"])
 def import_customers_csv():
-    """Bulk-load customers and their invoices from a CSV (one invoice per row)."""
+    """Bulk-load customers (and optionally their invoices) from a .csv or .xlsx.
+    One row per invoice, or one row per customer when there is no invoice column."""
     emp = current_employee(request.form, admin=True)
     file = request.files.get("file")
     if not file:
         raise ApiError("No file uploaded")
-    if not file.filename.lower().endswith(".csv"):
-        raise ApiError("File must be a .csv")
-
-    reader = csv.DictReader(io.StringIO(file.stream.read().decode("utf-8-sig"), newline=""))
-    names = reader.fieldnames or []
+    filename = file.filename.lower()
+    if filename.endswith(".csv"):
+        reader = csv.DictReader(io.StringIO(file.stream.read().decode("utf-8-sig"), newline=""))
+        names = reader.fieldnames or []
+    elif filename.endswith(".xlsx"):
+        try:
+            sheet = openpyxl.load_workbook(file.stream, read_only=True, data_only=True).worksheets[0]
+        except Exception:
+            raise ApiError("Could not read that Excel file.")
+        sheet_rows = sheet.iter_rows(values_only=True)
+        names = [str(c).strip() if c is not None else "" for c in next(sheet_rows, [])]
+        reader = (dict(zip(names, ["" if c is None else str(c) for c in r])) for r in sheet_rows)
+    else:
+        raise ApiError("File must be a .csv or .xlsx")
 
     def find(*options):
         return next((h for h in names if h.strip().lower() in options), None)
 
-    customer_col = find("customer", "client", "customer name", "client name")
+    customer_col = find("customer", "client", "customer name", "client name",
+                        "company name", "company")
     number_col = find("invoice", "invoice number", "invoice #", "job number", "job", "number")
     title_col = find("title", "description", "desc", "name")
     if not customer_col:
         raise ApiError("Could not find a customer column. Expected a column named "
-                       "Customer, Client, or Customer Name.")
+                       "Customer, Client, Customer Name, or Company Name.")
 
     sync_mode = request.form.get("deactivate_missing") in ("1", "true", "on")
     stats = defaultdict(int)
@@ -998,7 +1016,7 @@ def import_customers_csv():
                     conn.execute("UPDATE customers SET active=1, status='verified', "
                                  "updated_at=datetime('now','localtime') WHERE id=?", (cust["id"],))
                     audit(conn, emp, "update", "customer", cust["id"], cust["name"],
-                          customer_id=cust["id"], changes=changes, note="CSV import")
+                          customer_id=cust["id"], changes=changes, note="Bulk import")
                     stats["customers_updated"] += 1
 
             if not number:
@@ -1031,7 +1049,7 @@ def import_customers_csv():
                     "updated_at=datetime('now','localtime') WHERE id=?", (new_title, inv["id"]))
                 audit(conn, emp, "verify" if set(changes) == {"status"} else "update", "invoice",
                       inv["id"], f"{inv['invoice_number']} ({cust['name']})",
-                      customer_id=cust["id"], changes=changes, note="CSV import")
+                      customer_id=cust["id"], changes=changes, note="Bulk import")
                 stats["invoices_updated"] += 1
             else:
                 stats["unchanged"] += 1
@@ -1051,13 +1069,13 @@ def import_customers_csv():
                              "WHERE id=?", (r["id"],))
                 audit(conn, emp, "deactivate", "invoice", r["id"], r["invoice_number"],
                       customer_id=r["customer_id"], changes={"active": [1, 0]},
-                      note="CSV import sync — not in the uploaded file")
+                      note="Import sync — not in the uploaded file")
             stats["deactivated"] = len(stale)
 
         audit(conn, emp, "import", "import", None, file.filename,
               snapshot={"customers_added": new_customers[:500], "invoices_added": new_invoices[:500],
                         "totals": dict(stats)},
-              note="CSV import" + (" (sync: deactivated invoices missing from the file)" if sync_mode else ""))
+              note="Bulk import" + (" (sync: deactivated invoices missing from the file)" if sync_mode else ""))
     return jsonify(dict(stats))
 
 

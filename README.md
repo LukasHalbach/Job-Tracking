@@ -44,24 +44,27 @@ Each employee uses their name + PIN to sign in before logging time.
 2. **Optionally pick an invoice.** Only that customer's invoices are offered. You can attach several and split the hours between them.
 3. Pick a task, enter hours and notes, and submit. The customer stays selected so you can log several tasks in a row.
 
-### When it isn't in the system yet
+### Customers: requests, not self-service
 
-Because customers and invoices are entered by an admin, work often starts before the record exists. Employees can type a new customer or invoice number right in the form. It is saved immediately and marked **pending**. Admins see it under **Admin → Needs Review**, where they can:
+Only admins create customers (import your list under **Admin → Customers**, from Excel or CSV — a single `Company Name` or `Customer` column is enough).
 
-- **Verify** it as real,
-- **Rename & verify** it (fix a typo),
-- **Merge** it into an existing customer (moves all invoices and entries across),
-- **Fix** an invoice (change its number, title, or the customer it belongs to).
+If an employee needs a customer that isn't there, they type the name and choose **Request … as a new customer**. The request:
 
-If an admin later adds the same invoice under the same customer, the pending record is simply verified.
+- is visible **only to the person who made it** — it never appears in anyone else's customer list;
+- lets them **keep logging time against it** (any number of entries, tasks and invoices) while it waits;
+- shows up for you under **Admin → Needs Review → Customer requests**.
 
-An invoice number is unique across all customers. If someone types a number that is on file under a different customer, they are told which one (or can switch customer in one click).
+You then choose **Approve** (it becomes a normal customer for everyone and their time stays attached), **Rename & approve** (fix a typo first), or **Merge into existing…** (it was really an existing customer; all their time moves across). **Decline** is available when no time has been logged against the request.
+
+Invoices work the same lighter way: employees can type an invoice number that isn't on file yet and it is flagged for review (Verify / Fix…).
+
+An invoice number is unique across all customers. If someone types a number that is on file under a different customer, they're told which one (or can switch customer in one click).
 
 ## Customers
 
 - **Customers tab** (everyone): browse customers and open a profile showing invoices with hours, hours by task, and recent entries. Employees see their own hours; admins see everyone's, plus hours by employee and the customer's recent changes.
 - **Admin → Customers**: add, rename, deactivate, merge, or delete customers and manage each customer's invoices. A customer or invoice with time entries can't be deleted — merge or deactivate instead.
-- **CSV import** (Admin → Customers): one invoice per row with columns `Customer`, `Invoice Number` (optional), `Title` (optional). Customers are created as needed. "Deactivate verified invoices not in this file" syncs your open-invoice list; invoices employees added on the fly are never deactivated by it.
+- **Import** (Admin → Customers, `.xlsx` or `.csv`): columns `Company Name`/`Customer`, plus optional `Invoice Number` and `Title` (one invoice per row). Re-importing is safe — existing customers are left alone. "Deactivate verified invoices not in this file" syncs your open-invoice list; invoices employees added on the fly are never deactivated by it.
 - **Shop / Internal** is a protected customer for general shop work.
 
 ## Change tracking

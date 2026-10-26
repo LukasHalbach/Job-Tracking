@@ -94,7 +94,7 @@ function buildQuickHours(containerId, inputId) {
 
 function statusBadge(status) {
   return status === 'pending'
-    ? '<span class="status-badge pending" title="Added on the fly — waiting for admin review">pending</span>'
+    ? '<span class="status-badge pending" title="Awaiting admin review">pending</span>'
     : '';
 }
 

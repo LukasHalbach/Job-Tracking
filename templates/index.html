@@ -175,13 +175,13 @@
         </div>
         <div class="csv-upload-section">
           <div class="csv-upload-label">
-            <strong>Bulk import from CSV</strong>
-            <span class="hint"> — one invoice per row. Columns: <code>Customer</code>, <code>Invoice Number</code> (optional), <code>Title</code> (optional)</span>
+            <strong>Bulk import from Excel or CSV</strong>
+            <span class="hint"> — a customer list needs just one column (<code>Company Name</code> or <code>Customer</code>). To load invoices too, add <code>Invoice Number</code> and optionally <code>Title</code>, one invoice per row</span>
           </div>
           <div class="csv-upload-row">
             <label class="file-label" for="csv-file-input">
-              <span id="csv-file-name">Choose CSV file…</span>
-              <input type="file" id="csv-file-input" accept=".csv" />
+              <span id="csv-file-name">Choose file…</span>
+              <input type="file" id="csv-file-input" accept=".csv,.xlsx" />
             </label>
             <button class="btn btn-primary" id="import-csv-btn" disabled>Import</button>
           </div>
@@ -199,9 +199,9 @@
       <!-- Needs Review tab -->
       <div class="tab-content" id="tab-review">
         <p class="hint-block" style="margin-bottom:.75rem">
-          Customers and invoices employees typed in because they weren't in the system yet,
-          plus time logged under <strong>Not Listed</strong>. Verify what's real, fix typos
-          (merge duplicates), and give Not Listed entries a proper task.
+          Customers employees have <strong>requested</strong> (only they can see them until you act),
+          invoices they typed in, and time logged under <strong>Not Listed</strong>.
+          Approve a request, rename it, or merge it into an existing customer — their time moves with it.
         </p>
         <button class="btn btn-secondary btn-sm" id="refresh-review-btn" style="margin-bottom:.75rem">Refresh</button>
         <div id="review-body"></div>

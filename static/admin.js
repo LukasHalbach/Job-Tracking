@@ -252,7 +252,7 @@ $('merge-ok').addEventListener('click', async () => {
 /* CSV import */
 $('csv-file-input').addEventListener('change', () => {
   const file = $('csv-file-input').files[0];
-  $('csv-file-name').textContent = file ? file.name : 'Choose CSV file…';
+  $('csv-file-name').textContent = file ? file.name : 'Choose file…';
   $('import-csv-btn').disabled = !file;
   $('csv-result').className = 'hidden';
   $('csv-result').textContent = '';
@@ -287,7 +287,7 @@ $('import-csv-btn').addEventListener('click', async () => {
     result.textContent = `Done — ${parts.join(', ') || 'nothing to change'}.`;
     result.className = 'ok';
     $('csv-file-input').value = '';
-    $('csv-file-name').textContent = 'Choose CSV file…';
+    $('csv-file-name').textContent = 'Choose file…';
     $('import-csv-btn').disabled = true;
     $('csv-deactivate-missing').checked = false;
     await Promise.all([loadAdminCustomers(), refreshEverything()]);
@@ -336,24 +336,30 @@ async function loadReview() {
 
   /* Pending customers */
   if (d.customers.length) {
-    body.insertAdjacentHTML('beforeend', `<h4 class="cd-sub">New customers (${d.customers.length})</h4>`);
+    body.insertAdjacentHTML('beforeend', `<h4 class="cd-sub">Customer requests (${d.customers.length})</h4>`);
     d.customers.forEach(c => {
       const div = document.createElement('div');
       div.className = 'admin-item review-item';
       div.innerHTML = `
         <span class="item-name">${escHtml(c.name)}</span>
-        <span class="item-meta">added by ${escHtml(c.created_by_name || '?')} on ${escHtml((c.created_at || '').slice(0, 10))}
+        <span class="item-meta">requested by ${escHtml(c.created_by_name || '?')} on ${escHtml((c.created_at || '').slice(0, 10))}
           · ${c.entry_count} entr${c.entry_count === 1 ? 'y' : 'ies'} (${fmtHours(c.hours)} hrs) · ${c.invoice_count} invoice${c.invoice_count === 1 ? '' : 's'}</span>
         <div class="item-actions">
-          <button class="btn btn-sm btn-primary" data-act="verify">Verify</button>
-          <button class="btn btn-sm btn-secondary" data-act="rename">Rename &amp; verify</button>
-          <button class="btn btn-sm btn-secondary" data-act="merge">Merge into…</button>
+          <button class="btn btn-sm btn-primary" data-act="verify">Approve</button>
+          <button class="btn btn-sm btn-secondary" data-act="rename">Rename &amp; approve</button>
+          <button class="btn btn-sm btn-secondary" data-act="merge">Merge into existing…</button>
+          ${c.entry_count ? '' : '<button class="btn btn-sm btn-danger" data-act="decline">Decline</button>'}
         </div>`;
       body.appendChild(div);
+      const decline = div.querySelector('[data-act="decline"]');
+      if (decline) decline.addEventListener('click', () => {
+        if (!confirm(`Decline the request for "${c.name}"?`)) return;
+        adminAction(() => api('DELETE', `/api/customers/${c.id}`, authBody()), refresh);
+      });
       div.querySelector('[data-act="verify"]').addEventListener('click', () =>
         adminAction(() => api('PUT', `/api/customers/${c.id}`, authBody({ status: 'verified' })), refresh));
       div.querySelector('[data-act="rename"]').addEventListener('click', () => {
-        const name = prompt('Correct customer name:', c.name);
+        const name = prompt('Customer name to approve:', c.name);
         if (!name || !name.trim()) return;
         adminAction(() => api('PUT', `/api/customers/${c.id}`, authBody({ name: name.trim(), status: 'verified' })), refresh);
       });
