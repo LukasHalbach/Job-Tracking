@@ -52,7 +52,7 @@ async function loadCustomerDetail(id) {
 
   const invoiceRows = d.invoices.map(i => `
     <tr class="${i.active ? '' : 'row-inactive'}">
-      <td><strong>${escHtml(i.invoice_number)}</strong>${statusBadge(i.status)}${i.active ? '' : ' <span class="status-badge inactive">inactive</span>'}</td>
+      <td><strong>${escHtml(i.invoice_number)}</strong>${statusBadge(i.status, 'invoice')}${i.active ? '' : ' <span class="status-badge inactive">inactive</span>'}</td>
       <td>${escHtml(i.title) || '<span class="muted">—</span>'}</td>
       <td class="num">${fmtHours(i.hours)}</td>
       <td class="num">${i.entries}</td>

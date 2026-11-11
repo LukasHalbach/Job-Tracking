@@ -92,10 +92,13 @@ function buildQuickHours(containerId, inputId) {
   });
 }
 
-function statusBadge(status) {
-  return status === 'pending'
-    ? '<span class="status-badge pending" title="Awaiting admin review">pending</span>'
-    : '';
+function statusBadge(status, kind = 'customer') {
+  if (status !== 'pending') return '';
+  // A pending customer is a request awaiting approval; a pending invoice is just
+  // a number an employee typed that hasn't been matched to the order system.
+  return kind === 'invoice'
+    ? '<span class="status-badge typed" title="Typed in by an employee — not confirmed against your order system">typed</span>'
+    : '<span class="status-badge pending" title="Requested — awaiting admin approval">pending</span>';
 }
 
 /* ── Change history rendering (shared by entry, customer and admin views) ── */

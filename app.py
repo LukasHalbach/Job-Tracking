@@ -446,8 +446,7 @@ def resolve_invoice(conn, emp, customer, spec, current_invoice=None):
                   f"{number} ({customer['name']})", customer_id=customer["id"],
                   snapshot={"invoice_number": number, "customer": customer["name"],
                             "status": status},
-                  note="Added on the fly while logging time" +
-                       ("" if emp["is_admin"] else " — pending admin review"))
+                  note="Typed in while logging time")
             return conn.execute("SELECT * FROM invoices WHERE id=?", (cur.lastrowid,)).fetchone()
 
     if inv["customer_id"] != customer["id"]:
@@ -1506,7 +1505,8 @@ def set_role_tasks(role_id):
 
 @app.route("/api/admin/review", methods=["GET"])
 def admin_review():
-    """Things that got established on the fly and need an admin's eyes."""
+    """Things that need an admin's decision: customer requests and Not Listed
+    time. Typed invoice numbers are accepted as-is and don't queue here."""
     current_employee(request.args, admin=True)
     with get_db() as conn:
         customers = conn.execute("""
@@ -1516,15 +1516,6 @@ def admin_review():
                    (SELECT COUNT(*) FROM invoices i WHERE i.customer_id = c.id) AS invoice_count
             FROM customers c LEFT JOIN employees e ON e.id = c.created_by
             WHERE c.status = 'pending' ORDER BY c.created_at DESC
-        """).fetchall()
-        invoices = conn.execute("""
-            SELECT i.id, i.invoice_number, i.title, i.customer_id, c.name AS customer_name,
-                   i.created_at, e.name AS created_by_name,
-                   (SELECT COUNT(*) FROM time_entries te WHERE te.invoice_id = i.id) AS entry_count,
-                   (SELECT COALESCE(SUM(hours), 0) FROM time_entries te WHERE te.invoice_id = i.id) AS hours
-            FROM invoices i JOIN customers c ON c.id = i.customer_id
-            LEFT JOIN employees e ON e.id = i.created_by
-            WHERE i.status = 'pending' ORDER BY i.created_at DESC
         """).fetchall()
         not_listed = conn.execute(
             ENTRY_SELECT + " WHERE te.task_name = ? ORDER BY te.entry_date DESC, te.id DESC LIMIT 200",
@@ -1537,11 +1528,76 @@ def admin_review():
             "ORDER BY name COLLATE NOCASE").fetchall()
     return jsonify({
         "customers": [dict(r) for r in customers],
-        "invoices": [dict(r) for r in invoices],
         "not_listed_entries": [entry_dict(r) for r in not_listed],
         "active_tasks": [dict(r) for r in tasks],
         "all_customers": [dict(r) for r in all_customers],
     })
+
+
+@app.route("/api/admin/unassigned", methods=["GET"])
+def admin_unassigned():
+    """Time logged with no invoice, grouped by customer, plus each customer's
+    invoices and the dates they were worked on — enough to tell which job a
+    stray entry belongs to."""
+    current_employee(request.args, admin=True)
+    a = request.args
+    where, params = ["te.invoice_id IS NULL", "c.is_system = 0"], []
+    if a.get("date_from"):
+        where.append("te.entry_date >= ?")
+        params.append(a["date_from"])
+    if a.get("date_to"):
+        where.append("te.entry_date <= ?")
+        params.append(a["date_to"])
+    with get_db() as conn:
+        rows = conn.execute(
+            ENTRY_SELECT + " WHERE " + " AND ".join(where) +
+            " ORDER BY c.name COLLATE NOCASE, te.entry_date, te.id LIMIT 1000", params).fetchall()
+        groups = {}
+        for r in rows:
+            g = groups.setdefault(r["customer_id"], {
+                "customer_id": r["customer_id"], "customer_name": r["customer_name"],
+                "customer_status": r["customer_status"], "entries": [], "invoices": []})
+            g["entries"].append(entry_dict(r))
+        for cid, g in groups.items():
+            g["invoices"] = [dict(i) for i in conn.execute("""
+                SELECT i.id, i.invoice_number, i.title, i.status,
+                       MIN(te.entry_date) AS first_entry, MAX(te.entry_date) AS last_entry,
+                       COALESCE(SUM(te.hours), 0) AS hours
+                FROM invoices i LEFT JOIN time_entries te ON te.invoice_id = i.id
+                WHERE i.customer_id = ? AND i.active = 1
+                GROUP BY i.id ORDER BY last_entry DESC, i.invoice_number COLLATE NOCASE
+            """, (cid,)).fetchall()]
+    return jsonify(list(groups.values()))
+
+
+@app.route("/api/admin/assign-invoice", methods=["POST"])
+def admin_assign_invoice():
+    """Put one invoice on several entries of the same customer at once."""
+    data = body()
+    emp = current_employee(data, admin=True)
+    entry_ids = data.get("entry_ids") or []
+    if not entry_ids:
+        raise ApiError("Select at least one entry.")
+    with get_db() as conn:
+        customer = conn.execute("SELECT * FROM customers WHERE id=?",
+                                (data.get("customer_id"),)).fetchone()
+        if not customer:
+            raise ApiError("Customer not found.")
+        entries = [fetch_entry(conn, eid) for eid in entry_ids]
+        if any(e is None or e["customer_id"] != customer["id"] for e in entries):
+            raise ApiError("Those entries don't all belong to this customer. Refresh and try again.")
+        inv = resolve_invoice(conn, emp, customer, data.get("invoice"))
+        for e in entries:
+            if e["invoice_id"] == inv["id"]:
+                continue
+            conn.execute("UPDATE time_entries SET invoice_id=?, "
+                         "updated_at=datetime('now','localtime') WHERE id=?", (inv["id"], e["id"]))
+            new_view = entry_view(fetch_entry(conn, e["id"]))
+            audit(conn, emp, "update", "entry", e["id"], entry_label(new_view),
+                  customer_id=customer["id"],
+                  changes={"invoice": [e["invoice_number"], inv["invoice_number"]]},
+                  note="Invoice assigned afterwards by admin")
+    return jsonify({"ok": True, "assigned": len(entries), "invoice_number": inv["invoice_number"]})
 
 
 def audit_row(r):

@@ -1116,3 +1116,16 @@ body {
 /* Checkbox rows inside form fields (e.g. "Split hours") */
 .field label.checkbox-label { justify-content: flex-start; text-transform: none; letter-spacing: 0; white-space: normal; }
 .field label.checkbox-label input { width: auto; flex: none; }
+
+/* Typed (unconfirmed) invoice numbers */
+.status-badge.typed { background: var(--gray-100); color: var(--gray-500); border: 1px solid var(--gray-300); }
+
+/* Admin: unassigned time */
+.unassigned-group { border: 1px solid var(--gray-200); border-radius: var(--radius); padding: .75rem; margin-bottom: .9rem; background: var(--gray-50); }
+.ua-head { display: flex; align-items: baseline; gap: .6rem; flex-wrap: wrap; margin-bottom: .5rem; }
+.ua-suggest { display: flex; align-items: center; flex-wrap: wrap; gap: .1rem; margin-bottom: .5rem; }
+.chip-dates { font-weight: 400; color: var(--gray-500); margin-left: .35rem; }
+.unassigned-group .table-scroll { background: #fff; }
+.ua-assign { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin-top: .6rem; }
+.ua-number { padding: .4rem .6rem; border: 1.5px solid var(--gray-300); border-radius: var(--radius); font: inherit; font-size: .88rem; width: 200px; }
+.ua-number:focus { outline: none; border-color: var(--blue); }

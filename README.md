@@ -56,7 +56,11 @@ If an employee needs a customer that isn't there, they type the name and choose 
 
 You then choose **Approve** (it becomes a normal customer for everyone and their time stays attached), **Rename & approve** (fix a typo first), or **Merge into existing…** (it was really an existing customer; all their time moves across). **Decline** is available when no time has been logged against the request.
 
-Invoices work the same lighter way: employees can type an invoice number that isn't on file yet and it is flagged for review (Verify / Fix…).
+### Job / invoice numbers are optional
+
+You don't have to load job numbers ahead of time. Employees can leave the invoice blank, pick one already on file for that customer, or type the number. A typed number is saved as-is and shown with a small **typed** label (it hasn't been confirmed against your order system); it does not need review.
+
+For time logged with no number, **Admin → Unassigned Time** lists it by customer with dates, alongside that customer's invoices and the dates each was worked on. Tick the entries, pick or type the number, and assign them in one go. Each assignment is recorded in the entry's change history.
 
 An invoice number is unique across all customers. If someone types a number that is on file under a different customer, they're told which one (or can switch customer in one click).
 
@@ -64,7 +68,7 @@ An invoice number is unique across all customers. If someone types a number that
 
 - **Customers tab** (everyone): browse customers and open a profile showing invoices with hours, hours by task, and recent entries. Employees see their own hours; admins see everyone's, plus hours by employee and the customer's recent changes.
 - **Admin → Customers**: add, rename, deactivate, merge, or delete customers and manage each customer's invoices. A customer or invoice with time entries can't be deleted — merge or deactivate instead.
-- **Import** (Admin → Customers, `.xlsx` or `.csv`): columns `Company Name`/`Customer`, plus optional `Invoice Number` and `Title` (one invoice per row). Re-importing is safe — existing customers are left alone. "Deactivate verified invoices not in this file" syncs your open-invoice list; invoices employees added on the fly are never deactivated by it.
+- **Import** (Admin → Customers, `.xlsx` or `.csv`): columns `Company Name`/`Customer`, plus optional `Invoice Number` and `Title` (one invoice per row). Re-importing is safe — existing customers are left alone. "Deactivate confirmed invoices not in this file" syncs your open-invoice list; numbers employees typed in are never deactivated by it.
 - **Shop / Internal** is a protected customer for general shop work.
 
 ## Change tracking

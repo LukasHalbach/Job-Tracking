@@ -160,7 +160,7 @@ function createEntryFields(p, mountId, { multi }) {
       : (invoices.length && !multi ? '' : 'Search this customer’s invoices, or type a number…');
     invoiceInput.style.display = (!multi && invoices.length) ? 'none' : '';
     $(`${p}invoice-note`).textContent = invoices.some(i => i._new)
-      ? 'Invoice numbers not in the system yet will be added and flagged for admin review.' : '';
+      ? 'New invoice numbers are saved as typed — double-check the number.' : '';
     if (multi) $(`${p}split-wrap`).style.display = invoices.length >= 2 ? '' : 'none';
   }
 
@@ -177,7 +177,7 @@ function createEntryFields(p, mountId, { multi }) {
     inputId: `${p}invoice`, listId: `${p}invoice-list`,
     items: () => customerInvoices().filter(i => !invoices.some(s => s.id === i.id)),
     getLabel: i => i._new || i.invoice_number,
-    getSub: i => [i.title, i.status === 'pending' ? 'pending review' : ''].filter(Boolean).join(' — '),
+    getSub: i => [i.title, ''].filter(Boolean).join(' — '),
     getSearch: i => `${i.invoice_number} ${i.title || ''}`,
     clearOnFocus: true, setInputOnSelect: false,
     extra: q => {
@@ -189,7 +189,7 @@ function createEntryFields(p, mountId, { multi }) {
     },
     extraLabel: x => x._switch
       ? `Invoice ${x._switch.invoice_number} belongs to ${x._switch.customer_name} — switch customer`
-      : `+ Use "${x._new}" (not in the system yet)`,
+      : `+ Use "${x._new}"`,
     onSelect: x => {
       if (x._switch) {
         const target = state.customers.find(c => c.id === x._switch.customer_id);
@@ -312,7 +312,7 @@ $('submit-btn').addEventListener('click', async () => {
     const n = res.ids.length;
     showMsg($('entry-success'),
       `Saved ${n} entr${n === 1 ? 'y' : 'ies'}.` +
-      (hadNew ? (hadNewCustomer && !state.isAdmin ? ' Your customer request was sent to an admin.' : ' New invoice flagged for admin review.') : ''), 'success');
+      (hadNew ? (hadNewCustomer && !state.isAdmin ? ' Your customer request was sent to an admin.' : '') : ''), 'success');
     // Keep the customer and date: people usually log several tasks in a row.
     logFields.reset({ keepCustomer: true, keepDate: true });
     await Promise.all([loadCustomers(), loadInvoices(), loadEntries(), loadRecentCustomers()]);
@@ -393,7 +393,7 @@ function renderEntries() {
   state.entries.forEach(e => {
     total += e.hours;
     const invoiceCell = e.invoice_number
-      ? `<span title="${escHtml(e.invoice_title)}">${escHtml(e.invoice_number)}</span>${statusBadge(e.invoice_status)}`
+      ? `<span title="${escHtml(e.invoice_title)}">${escHtml(e.invoice_number)}</span>${statusBadge(e.invoice_status, 'invoice')}`
       : '<span class="muted">—</span>';
     const tr = document.createElement('tr');
     tr.innerHTML = `

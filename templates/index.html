@@ -159,6 +159,7 @@
       <div class="tab-bar">
         <button class="tab active" data-tab="customers">Customers</button>
         <button class="tab" data-tab="review">Needs Review <span class="tab-badge hidden" id="review-badge"></span></button>
+        <button class="tab" data-tab="unassigned">Unassigned Time</button>
         <button class="tab" data-tab="history">History</button>
         <button class="tab" data-tab="tasks">Tasks</button>
         <button class="tab" data-tab="employees">Employees</button>
@@ -187,8 +188,8 @@
           </div>
           <label class="csv-sync-option">
             <input type="checkbox" id="csv-deactivate-missing" />
-            Deactivate verified invoices not in this file
-            <span class="hint"> — use when importing your full list of open invoices. Invoices employees added on the fly are never deactivated by this.</span>
+            Deactivate confirmed invoices not in this file
+            <span class="hint"> — use when importing your full list of open invoices. Numbers employees typed in are never deactivated by this.</span>
           </label>
           <div id="csv-result" class="hidden"></div>
         </div>
@@ -199,12 +200,28 @@
       <!-- Needs Review tab -->
       <div class="tab-content" id="tab-review">
         <p class="hint-block" style="margin-bottom:.75rem">
-          Customers employees have <strong>requested</strong> (only they can see them until you act),
-          invoices they typed in, and time logged under <strong>Not Listed</strong>.
+          Customers employees have <strong>requested</strong> (only they can see them until you act)
+          and time logged under <strong>Not Listed</strong>.
           Approve a request, rename it, or merge it into an existing customer — their time moves with it.
         </p>
         <button class="btn btn-secondary btn-sm" id="refresh-review-btn" style="margin-bottom:.75rem">Refresh</button>
         <div id="review-body"></div>
+      </div>
+
+      <!-- Unassigned Time tab -->
+      <div class="tab-content" id="tab-unassigned">
+        <p class="hint-block" style="margin-bottom:.75rem">
+          Time logged against a customer with no job / invoice number. Work out which job it was from the
+          customer and the dates, tick the entries, and assign the number in one go. This is optional —
+          the time already counts toward the customer.
+        </p>
+        <div class="history-filters">
+          <input type="date" id="unassigned-from" title="From date" />
+          <input type="date" id="unassigned-to" title="To date" />
+          <button class="btn btn-secondary btn-sm" id="unassigned-refresh">Refresh</button>
+          <span id="unassigned-count" class="hint"></span>
+        </div>
+        <div id="unassigned-body" style="margin-top:.75rem"></div>
       </div>
 
       <!-- History tab -->

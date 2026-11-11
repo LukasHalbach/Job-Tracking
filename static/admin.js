@@ -18,6 +18,7 @@ document.querySelectorAll('.tab').forEach(tab => {
     $(`tab-${tab.dataset.tab}`).classList.add('active');
     if (tab.dataset.tab === 'review') loadReview();
     if (tab.dataset.tab === 'history') loadHistory(true);
+    if (tab.dataset.tab === 'unassigned') loadUnassigned();
   });
 });
 
@@ -171,10 +172,10 @@ async function renderInvoicePanel(afterDiv, customer) {
     const row = document.createElement('div');
     row.className = `admin-item sub ${inv.active ? '' : 'inactive'}`;
     row.innerHTML = `
-      <span class="item-name">${escHtml(inv.invoice_number)}${statusBadge(inv.status)}</span>
+      <span class="item-name">${escHtml(inv.invoice_number)}${statusBadge(inv.status, 'invoice')}</span>
       <span class="item-meta">${escHtml(inv.title)}</span>
       <div class="item-actions">
-        ${inv.status === 'pending' ? '<button class="btn btn-sm btn-primary" data-act="verify">Verify</button>' : ''}
+        ${inv.status === 'pending' ? '<button class="btn btn-sm btn-primary" data-act="verify" title="Mark this typed number as confirmed">Confirm</button>' : ''}
         <button class="toggle-btn ${inv.active ? 'active' : 'inactive'}" data-act="toggle">${inv.active ? 'Active' : 'Inactive'}</button>
         <button class="btn btn-sm btn-secondary" data-act="edit">Edit</button>
         <button class="btn btn-sm btn-danger" data-act="delete">Delete</button>
@@ -189,7 +190,7 @@ async function renderInvoicePanel(afterDiv, customer) {
   });
 }
 
-function editInvoiceInline(row, inv, refresh, { verify = false } = {}) {
+function editInvoiceInline(row, inv, refresh) {
   const options = adminCustomers.filter(c => !c.is_system)
     .map(c => `<option value="${c.id}" ${c.id === inv.customer_id ? 'selected' : ''}>${escHtml(c.name)}</option>`).join('');
   row.innerHTML = `
@@ -197,15 +198,14 @@ function editInvoiceInline(row, inv, refresh, { verify = false } = {}) {
     <input class="edit-inline-input" value="${escHtml(inv.title || '')}" placeholder="Title" style="flex:2" />
     <select class="edit-inline-input" style="flex:2" title="Customer (change to move this invoice)">${options}</select>
     <div class="item-actions">
-      <button class="btn btn-sm btn-primary save-inline-btn">${verify ? 'Save &amp; verify' : 'Save'}</button>
+      <button class="btn btn-sm btn-primary save-inline-btn">Save</button>
       <button class="btn btn-sm btn-secondary cancel-inline-btn">Cancel</button>
     </div>`;
   row.querySelector('.save-inline-btn').addEventListener('click', () => {
     const [num, title, cust] = [...row.querySelectorAll('.edit-inline-input')].map(i => i.value.trim());
     if (!num) { alert('Invoice number is required.'); return; }
     adminAction(() => api('PUT', `/api/invoices/${inv.id}`,
-      authBody({ invoice_number: num, title, customer_id: parseInt(cust),
-                 ...(verify ? { status: 'verified' } : {}) })), refresh);
+      authBody({ invoice_number: num, title, customer_id: parseInt(cust) })), refresh);
   });
   row.querySelector('.cancel-inline-btn').addEventListener('click', refresh);
 }
@@ -302,7 +302,7 @@ $('import-csv-btn').addEventListener('click', async () => {
 async function refreshReviewBadge() {
   try {
     const d = await api('GET', `/api/admin/review?${authQ()}`);
-    const n = d.customers.length + d.invoices.length + d.not_listed_entries.length;
+    const n = d.customers.length + d.not_listed_entries.length;
     for (const id of ['review-badge', 'admin-badge']) {
       $(id).textContent = n;
       $(id).classList.toggle('hidden', !n);
@@ -324,7 +324,7 @@ async function loadReview() {
     body.innerHTML = `<p class="error-msg">${escHtml(e.message)}</p>`;
     return;
   }
-  const n = d.customers.length + d.invoices.length + d.not_listed_entries.length;
+  const n = d.customers.length + d.not_listed_entries.length;
   for (const id of ['review-badge', 'admin-badge']) {
     $(id).textContent = n;
     $(id).classList.toggle('hidden', !n);
@@ -366,30 +366,6 @@ async function loadReview() {
       div.querySelector('[data-act="merge"]').addEventListener('click', () => {
         const full = adminCustomers.find(x => x.id === c.id) || c;
         openMergeModal(full);
-      });
-    });
-  }
-
-  /* Pending invoices */
-  if (d.invoices.length) {
-    body.insertAdjacentHTML('beforeend', `<h4 class="cd-sub">New invoices (${d.invoices.length})</h4>`);
-    d.invoices.forEach(i => {
-      const div = document.createElement('div');
-      div.className = 'admin-item review-item';
-      div.innerHTML = `
-        <span class="item-name">${escHtml(i.invoice_number)}</span>
-        <span class="item-meta">${escHtml(i.customer_name)} · added by ${escHtml(i.created_by_name || '?')} on ${escHtml((i.created_at || '').slice(0, 10))}
-          · ${i.entry_count} entr${i.entry_count === 1 ? 'y' : 'ies'} (${fmtHours(i.hours)} hrs)</span>
-        <div class="item-actions">
-          <button class="btn btn-sm btn-primary" data-act="verify">Verify</button>
-          <button class="btn btn-sm btn-secondary" data-act="edit">Fix…</button>
-        </div>`;
-      body.appendChild(div);
-      div.querySelector('[data-act="verify"]').addEventListener('click', () =>
-        adminAction(() => api('PUT', `/api/invoices/${i.id}`, authBody({ status: 'verified' })), refresh));
-      div.querySelector('[data-act="edit"]').addEventListener('click', () => {
-        const inv = { id: i.id, invoice_number: i.invoice_number, title: i.title, customer_id: i.customer_id };
-        editInvoiceInline(div, inv, refresh, { verify: true });
       });
     });
   }
@@ -440,6 +416,95 @@ async function loadReview() {
 }
 
 $('refresh-review-btn').addEventListener('click', loadReview);
+
+/* ── Admin: Unassigned time ──────────────────────────────────────────────── */
+/* Time logged against a customer with no invoice. The admin works out which job
+   it was from the customer and the dates, then assigns it in bulk. */
+async function loadUnassigned() {
+  const body = $('unassigned-body');
+  body.innerHTML = '<p class="hint">Loading…</p>';
+  const p = new URLSearchParams({ employee_id: state.employeeId, pin: state.pin });
+  if ($('unassigned-from').value) p.set('date_from', $('unassigned-from').value);
+  if ($('unassigned-to').value)   p.set('date_to', $('unassigned-to').value);
+  let groups;
+  try {
+    groups = await api('GET', `/api/admin/unassigned?${p}`);
+  } catch (e) {
+    body.innerHTML = `<p class="error-msg">${escHtml(e.message)}</p>`;
+    return;
+  }
+  const total = groups.reduce((n, g) => n + g.entries.length, 0);
+  $('unassigned-count').textContent = total
+    ? `${total} entr${total === 1 ? 'y' : 'ies'} without an invoice across ${groups.length} customer${groups.length === 1 ? '' : 's'}`
+    : '';
+  if (!total) { body.innerHTML = '<p class="empty-row">No time is waiting for an invoice in this range.</p>'; return; }
+
+  body.innerHTML = '';
+  groups.forEach(g => {
+    const hours = g.entries.reduce((n, e) => n + e.hours, 0);
+    const card = document.createElement('div');
+    card.className = 'unassigned-group';
+    const listId = `ua-invoices-${g.customer_id}`;
+    card.innerHTML = `
+      <div class="ua-head">
+        <strong>${escHtml(g.customer_name)}</strong>${statusBadge(g.customer_status)}
+        <span class="item-meta">${g.entries.length} entr${g.entries.length === 1 ? 'y' : 'ies'} · ${fmtHours(hours)} hrs</span>
+      </div>
+      ${g.invoices.length ? `
+      <div class="ua-suggest">
+        <span class="recent-label">Their invoices:</span>
+        ${g.invoices.map(i => `<button type="button" class="chip" data-number="${escHtml(i.invoice_number)}"
+            title="${escHtml(i.title || '')}">${escHtml(i.invoice_number)}${i.title ? ' · ' + escHtml(i.title) : ''}
+            <span class="chip-dates">${i.first_entry ? (i.first_entry === i.last_entry ? i.first_entry : `${i.first_entry} → ${i.last_entry}`) : 'no time yet'}</span></button>`).join('')}
+      </div>` : ''}
+      <div class="table-scroll"><table class="entries-table cd-table">
+        <thead><tr><th><input type="checkbox" class="ua-all" title="Select all" /></th>
+          <th>Date</th><th>Employee</th><th>Task</th><th class="num">Hrs</th><th>Notes</th></tr></thead>
+        <tbody>${g.entries.map(e => `
+          <tr>
+            <td><input type="checkbox" class="ua-pick" value="${e.id}" /></td>
+            <td>${e.entry_date}</td>
+            <td>${escHtml(e.employee_name)}</td>
+            <td>${escHtml(e.task_name)}</td>
+            <td class="num"><strong>${e.hours}</strong></td>
+            <td title="${escHtml(e.notes)}">${escHtml(e.notes) || '—'}</td>
+          </tr>`).join('')}</tbody>
+      </table></div>
+      <div class="ua-assign">
+        <input type="text" class="ua-number" list="${listId}" placeholder="Job / invoice #" autocomplete="off" />
+        <datalist id="${listId}">${g.invoices.map(i => `<option value="${escHtml(i.invoice_number)}">${escHtml(i.title || '')}</option>`).join('')}</datalist>
+        <button class="btn btn-primary btn-sm ua-go">Assign to selected</button>
+        <span class="flagged-msg hidden"></span>
+      </div>`;
+    body.appendChild(card);
+
+    const picks = () => [...card.querySelectorAll('.ua-pick:checked')].map(cb => parseInt(cb.value));
+    const msg = card.querySelector('.flagged-msg');
+    const numberInput = card.querySelector('.ua-number');
+    card.querySelector('.ua-all').addEventListener('change', ev =>
+      card.querySelectorAll('.ua-pick').forEach(cb => { cb.checked = ev.target.checked; }));
+    card.querySelectorAll('.chip').forEach(chip =>
+      chip.addEventListener('click', () => { numberInput.value = chip.dataset.number; }));
+    card.querySelector('.ua-go').addEventListener('click', async () => {
+      const number = numberInput.value.trim();
+      const ids = picks();
+      const fail = text => { msg.textContent = text; msg.className = 'flagged-msg err'; };
+      if (!ids.length) return fail('Tick the entries this invoice applies to.');
+      if (!number) return fail('Enter the job / invoice number.');
+      try {
+        await api('POST', '/api/admin/assign-invoice',
+          authBody({ customer_id: g.customer_id, entry_ids: ids, invoice: { number } }));
+        await Promise.all([loadUnassigned(), refreshEverything()]);
+      } catch (e) {
+        fail(e.message);
+      }
+    });
+  });
+}
+
+$('unassigned-refresh').addEventListener('click', loadUnassigned);
+$('unassigned-from').addEventListener('change', loadUnassigned);
+$('unassigned-to').addEventListener('change', loadUnassigned);
 
 /* ── Admin: History (audit log) ──────────────────────────────────────────── */
 const HIST_PAGE = 100;
