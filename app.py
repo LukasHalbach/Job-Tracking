@@ -4,6 +4,10 @@ import hashlib
 import json
 import csv
 import io
+import glob
+import tempfile
+import threading
+import time
 from collections import defaultdict
 from datetime import datetime, date
 from flask import Flask, request, jsonify, render_template, send_file
@@ -15,6 +19,12 @@ app = Flask(__name__)
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 DB_PATH = os.path.join(DATA_DIR, "timelog.db")
 LEGACY_BACKUP_PATH = os.path.join(DATA_DIR, "timelog.pre-customer-overhaul.db")
+
+# Daily backups. Point TIMELOG_BACKUP_DIR at another drive or a network share so
+# a copy survives this computer's disk failing.
+BACKUP_DIR = os.environ.get("TIMELOG_BACKUP_DIR") or os.path.join(DATA_DIR, "backups")
+BACKUP_KEEP = 30
+BACKUP_RETRY_SECONDS = 600
 
 NOT_LISTED = "Not Listed"
 SHOP_CUSTOMER = "Shop / Internal"
@@ -240,33 +250,21 @@ def init_db():
             audit(conn, system, "create", "customer", cur.lastrowid, SHOP_CUSTOMER,
                   customer_id=cur.lastrowid, note="Seeded system customer")
 
-        # Sync tasks — add new, reactivate returning, deactivate removed
-        canonical = dict(TASKS)
-        existing = {row["name"]: row for row in
-                    conn.execute("SELECT id, name, category, active FROM tasks").fetchall()}
-        for name, category in TASKS:
-            row = existing.get(name)
-            if row is None:
+        # The built-in list only seeds an empty table. After that the Tasks tab
+        # is the source of truth, so admin edits survive a restart.
+        if conn.execute("SELECT COUNT(*) FROM tasks").fetchone()[0] == 0:
+            for name, category in TASKS:
                 cur = conn.execute("INSERT INTO tasks (name, category) VALUES (?, ?)",
                                    (name, category))
                 audit(conn, system, "create", "task", cur.lastrowid, name,
-                      snapshot={"name": name, "category": category}, note="Seeded from built-in task list")
-            elif row["category"] != category or not row["active"]:
-                changes = {}
-                if row["category"] != category:
-                    changes["category"] = [row["category"], category]
-                if not row["active"]:
-                    changes["active"] = [0, 1]
-                conn.execute("UPDATE tasks SET category=?, active=1 WHERE id=?",
-                             (category, row["id"]))
-                audit(conn, system, "update", "task", row["id"], name, changes=changes,
-                      note="Reset to built-in task list on startup")
-        for name, row in existing.items():
-            if name not in canonical and row["active"]:
-                conn.execute("UPDATE tasks SET active=0 WHERE id=?", (row["id"],))
-                audit(conn, system, "deactivate", "task", row["id"], name,
-                      changes={"active": [1, 0]},
-                      note="Not in built-in task list; deactivated on startup")
+                      snapshot={"name": name, "category": category},
+                      note="Seeded from built-in task list")
+        # "Not Listed" is the one task the app itself depends on.
+        not_listed = conn.execute("SELECT id, active FROM tasks WHERE name=?", (NOT_LISTED,)).fetchone()
+        if not not_listed:
+            conn.execute("INSERT INTO tasks (name, category) VALUES (?, 'Other')", (NOT_LISTED,))
+        elif not not_listed["active"]:
+            conn.execute("UPDATE tasks SET active=1 WHERE id=?", (not_listed["id"],))
 
         # Seed a default admin if no employees exist
         if conn.execute("SELECT COUNT(*) FROM employees").fetchone()[0] == 0:
@@ -282,6 +280,56 @@ def init_db():
                   note="Old jobs and time entries were set aside as legacy_jobs / "
                        "legacy_time_entries; a full backup was saved to "
                        "data/timelog.pre-customer-overhaul.db")
+
+
+# ── Backups ──────────────────────────────────────────────────────────────────
+
+_backup_lock = threading.Lock()
+_backup_state = {"day": None, "retry_at": 0.0, "error": None}
+
+
+def backup_database(target):
+    """Write a consistent copy of the live database to `target` (safe while the
+    app is in use — this is SQLite's online backup, not a file copy)."""
+    src = sqlite3.connect(DB_PATH)
+    dst = sqlite3.connect(target)
+    try:
+        src.backup(dst)
+    finally:
+        dst.close()
+        src.close()
+
+
+def run_daily_backup():
+    """Once per calendar day, snapshot the database into BACKUP_DIR and keep the
+    newest BACKUP_KEEP. Runs on the first request of the day, so each file holds
+    everything up to the end of the previous working day."""
+    today = date.today().isoformat()
+    if _backup_state["day"] == today or time.time() < _backup_state["retry_at"]:
+        return
+    if not os.path.exists(DB_PATH):
+        return
+    with _backup_lock:
+        if _backup_state["day"] == today:
+            return
+        try:
+            os.makedirs(BACKUP_DIR, exist_ok=True)
+            target = os.path.join(BACKUP_DIR, f"timelog-{today}.db")
+            if not os.path.exists(target):
+                tmp = target + ".tmp"
+                backup_database(tmp)
+                os.replace(tmp, target)
+            for old in sorted(glob.glob(os.path.join(BACKUP_DIR, "timelog-*.db")))[:-BACKUP_KEEP]:
+                os.remove(old)
+            _backup_state.update(day=today, error=None)
+        except Exception as exc:  # never let a backup problem block the app
+            app.logger.error("Daily backup failed: %s", exc)
+            _backup_state.update(error=str(exc), retry_at=time.time() + BACKUP_RETRY_SECONDS)
+
+
+@app.before_request
+def _daily_backup_hook():
+    run_daily_backup()
 
 
 # ── Audit helpers ────────────────────────────────────────────────────────────
@@ -1598,6 +1646,36 @@ def admin_assign_invoice():
                   changes={"invoice": [e["invoice_number"], inv["invoice_number"]]},
                   note="Invoice assigned afterwards by admin")
     return jsonify({"ok": True, "assigned": len(entries), "invoice_number": inv["invoice_number"]})
+
+
+@app.route("/api/admin/backups", methods=["GET"])
+def admin_backups():
+    current_employee(request.args, admin=True)
+    files = []
+    for path in sorted(glob.glob(os.path.join(BACKUP_DIR, "timelog-*.db")), reverse=True):
+        st = os.stat(path)
+        files.append({"name": os.path.basename(path), "size": st.st_size,
+                      "modified": datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M")})
+    return jsonify({"directory": os.path.abspath(BACKUP_DIR), "keep": BACKUP_KEEP,
+                    "backups": files, "error": _backup_state["error"]})
+
+
+@app.route("/api/admin/backup/download", methods=["GET"])
+def admin_backup_download():
+    """A fresh copy of the whole database, to keep somewhere off this computer."""
+    emp = current_employee(request.args, admin=True)
+    fd, tmp = tempfile.mkstemp(suffix=".db")
+    os.close(fd)
+    try:
+        backup_database(tmp)
+        with open(tmp, "rb") as fh:
+            data = fh.read()
+    finally:
+        os.remove(tmp)
+    with get_db() as conn:
+        audit(conn, emp, "backup", "system", None, "Database backup downloaded")
+    return send_file(io.BytesIO(data), mimetype="application/octet-stream", as_attachment=True,
+                     download_name=f"timelog-backup-{datetime.now():%Y%m%d-%H%M}.db")
 
 
 def audit_row(r):

@@ -88,7 +88,7 @@ Where to see it:
 
 ## Managing Tasks
 
-Tasks can be added or deactivated in **Admin → Tasks**. Each task has an associated category that auto-fills when the task is selected.
+Tasks can be added or deactivated in **Admin → Tasks**. Each task has an associated category that auto-fills when the task is selected. Changes you make there are permanent; the built-in list in `app.py` is only used to fill an empty database.
 
 The **Not Listed** task requires employees to fill in the Notes field describing the work. Admins re-assign those entries to a proper task under **Admin → Needs Review**.
 
@@ -106,6 +106,14 @@ The export includes:
 - **Change Log** (optional, admins): every create / edit / delete in the date range
 
 Admins export everyone's entries; other employees export only their own.
+
+## Backups
+
+The database is backed up automatically once a day, on the first use of the day, into `data/backups/` (`timelog-YYYY-MM-DD.db`). The newest 30 are kept.
+
+- **Keep a copy elsewhere.** Those files sit on the same computer as the app. Use **Admin → Export Data → Download backup now** from time to time, or set the `TIMELOG_BACKUP_DIR` environment variable to a folder on another drive or network share before starting the app.
+- **Restoring.** Stop the app, replace `data/timelog.db` with the backup file you want (rename it to `timelog.db`), delete any `timelog.db-wal` / `timelog.db-shm` files next to it, and start the app again.
+- The Export tab shows when the last automatic backup ran, and warns if one failed.
 
 ## Running on a Shared Computer
 
@@ -143,5 +151,3 @@ Job-Tracking/
 ## Upgrading from the invoice-based version
 
 On first start, a database from the old version is backed up to `data/timelog.pre-customer-overhaul.db`, and its old `jobs` and `time_entries` tables are renamed to `legacy_jobs` and `legacy_time_entries` (nothing is dropped). Employees, roles, role task lists and tasks carry over; customers, invoices and entries start fresh. The startup is recorded in the History log.
-
-Note: the built-in task list in `app.py` is re-applied at each start — tasks that are not in it are deactivated and edits to built-in task names/categories are reset. Changes made this way are recorded in History as "System".

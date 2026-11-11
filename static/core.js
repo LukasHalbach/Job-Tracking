@@ -105,7 +105,7 @@ function statusBadge(status, kind = 'customer') {
 const ACTION_LABELS = {
   create: 'Created', update: 'Edited', delete: 'Deleted', verify: 'Verified',
   merge: 'Merged', activate: 'Activated', deactivate: 'Deactivated',
-  import: 'Imported', migrate: 'Migrated',
+  import: 'Imported', migrate: 'Migrated', backup: 'Backup',
 };
 const FIELD_LABELS = {
   invoice_number: 'invoice #', is_admin: 'admin', active: 'status',

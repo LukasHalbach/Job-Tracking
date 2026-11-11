@@ -19,6 +19,7 @@ document.querySelectorAll('.tab').forEach(tab => {
     if (tab.dataset.tab === 'review') loadReview();
     if (tab.dataset.tab === 'history') loadHistory(true);
     if (tab.dataset.tab === 'unassigned') loadUnassigned();
+    if (tab.dataset.tab === 'export') loadBackupStatus();
   });
 });
 
@@ -798,4 +799,25 @@ $('export-btn').addEventListener('click', () => {
     + (from ? `&date_from=${from}` : '')
     + (to   ? `&date_to=${to}`     : '')
     + ($('export-include-log').checked ? '&include_log=1' : '');
+});
+
+/* ── Backups ─────────────────────────────────────────────────────────────── */
+async function loadBackupStatus() {
+  const el = $('backup-status');
+  try {
+    const d = await api('GET', `/api/admin/backups?${authQ()}`);
+    const latest = d.backups[0];
+    el.innerHTML =
+      (d.error ? `<span class="error-msg" style="display:block">Last automatic backup failed: ${escHtml(d.error)}</span>` : '') +
+      (latest
+        ? `Latest automatic backup: <strong>${escHtml(latest.modified)}</strong> · ${d.backups.length} kept (up to ${d.keep})`
+        : 'No automatic backup yet — the first one is made the next time the app is used.') +
+      `<br>Saved in <code>${escHtml(d.directory)}</code>`;
+  } catch (e) {
+    el.textContent = e.message;
+  }
+}
+
+$('backup-download-btn').addEventListener('click', () => {
+  window.location.href = `/api/admin/backup/download?${authQ()}`;
 });
