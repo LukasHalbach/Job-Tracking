@@ -68,7 +68,7 @@ An invoice number is unique across all customers. If someone types a number that
 
 - **Customers tab** (everyone): browse customers and open a profile showing invoices with hours, hours by task, and recent entries. Employees see their own hours; admins see everyone's, plus hours by employee and the customer's recent changes.
 - **Admin → Customers**: add, rename, deactivate, merge, or delete customers and manage each customer's invoices. A customer or invoice with time entries can't be deleted — merge or deactivate instead.
-- **Import** (Admin → Customers, `.xlsx` or `.csv`): columns `Company Name`/`Customer`, plus optional `Invoice Number` and `Title` (one invoice per row). Re-importing is safe — existing customers are left alone. "Deactivate confirmed invoices not in this file" syncs your open-invoice list; numbers employees typed in are never deactivated by it.
+- **Import** (Admin → Customers, `.xlsx` or `.csv`): columns `Company Name`/`Customer`, plus optional `Invoice Number` and `Title` (one invoice per row). An order export with `txtCustomerName`, `txtProductLineItem` (the invoice number) and `txtOrderText` (the title) is recognised as-is, so customers and invoices load from one file. Re-importing is safe — existing customers and invoices are left alone. "Deactivate confirmed invoices not in this file" syncs your open-invoice list; numbers employees typed in are never deactivated by it.
 - **Shop / Internal** is a protected customer for general shop work.
 
 ## Change tracking
@@ -151,3 +151,5 @@ Job-Tracking/
 ## Upgrading from the invoice-based version
 
 On first start, a database from the old version is backed up to `data/timelog.pre-customer-overhaul.db`, and its old `jobs` and `time_entries` tables are renamed to `legacy_jobs` and `legacy_time_entries` (nothing is dropped). Employees, roles, role task lists and tasks carry over; customers, invoices and entries start fresh. The startup is recorded in the History log.
+
+To get the old tracker's time out, use **Admin → Export Data → Download old tracker data (Excel)**. It contains every old entry as it was logged, with summaries by job and by employee and the old job list. The button only appears on a database that was upgraded from the old version.
