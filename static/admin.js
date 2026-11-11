@@ -343,7 +343,7 @@ async function loadReview() {
       div.className = 'admin-item review-item';
       div.innerHTML = `
         <span class="item-name">${escHtml(c.name)}</span>
-        <span class="item-meta">requested by ${escHtml(c.created_by_name || '?')} on ${escHtml((c.created_at || '').slice(0, 10))}
+        <span class="item-meta">${c.created_by_name ? 'requested by ' + escHtml(c.created_by_name) : 'from the old tracker'} on ${escHtml((c.created_at || '').slice(0, 10))}
           · ${c.entry_count} entr${c.entry_count === 1 ? 'y' : 'ies'} (${fmtHours(c.hours)} hrs) · ${c.invoice_count} invoice${c.invoice_count === 1 ? '' : 's'}</span>
         <div class="item-actions">
           <button class="btn btn-sm btn-primary" data-act="verify">Approve</button>
@@ -816,9 +816,16 @@ async function loadBackupStatus() {
     // Only databases upgraded from the invoice-based version have this.
     $('legacy-export').classList.toggle('hidden', d.legacy_entries === null);
     if (d.legacy_entries !== null) {
+      const left = d.legacy_remaining;
       $('legacy-export-info').textContent =
-        `${d.legacy_entries} time entr${d.legacy_entries === 1 ? 'y' : 'ies'} from the old invoice-based tracker ` +
-        'are kept exactly as they were logged. They are not part of the new reports; download them here.';
+        `${d.legacy_entries} time entr${d.legacy_entries === 1 ? 'y' : 'ies'} from the old invoice-based tracker. ` +
+        (left > 0
+          ? `${left} ${left === 1 ? 'has' : 'have'} not been brought into the new tracker yet.`
+          : 'All of them are in the new tracker.') +
+        (d.legacy_unusable
+          ? ` ${d.legacy_unusable} belong${d.legacy_unusable === 1 ? 's' : ''} to an employee who no longer exists and can only be downloaded.`
+          : '');
+      $('legacy-preview-btn').classList.toggle('hidden', left <= 0);
     }
   } catch (e) {
     el.textContent = e.message;
@@ -831,4 +838,56 @@ $('backup-download-btn').addEventListener('click', () => {
 
 $('legacy-export-btn').addEventListener('click', () => {
   window.location.href = `/api/export/legacy?${authQ()}`;
+});
+
+/* ── Bring old-tracker entries into the new tracker ──────────────────────── */
+function legacySummary(r) {
+  const n = (k) => r[k] || 0;
+  const items = [
+    [n('matched_by_invoice'), 'matched to a customer through their job number'],
+    [n('matched_by_name'), 'matched to a customer by name'],
+    [n('shop'), 'go to Shop / Internal'],
+    [n('matched_new_customer'), 'belong to customers not in your list (added as pending, see Needs Review)'],
+    [n('unknown_customer'), `have no customer at all and go to “Unknown customer (old tracker)”`],
+    [n('skipped_no_employee'), 'skipped — the employee no longer exists'],
+  ].filter(([c]) => c);
+  return `<ul class="legacy-list">${items.map(([c, t]) => `<li><strong>${c}</strong> ${escHtml(t)}</li>`).join('')}</ul>` +
+    (n('invoices_created') ? `<p class="hint">${n('invoices_created')} old job number${n('invoices_created') === 1 ? '' : 's'} not on file yet will be added as invoices.</p>` : '') +
+    (r.new_customers.length ? `<p class="hint">Customers not in your list: ${r.new_customers.map(escHtml).join(', ')}</p>` : '') +
+    (r.unmatched_jobs.length ? `<p class="hint">Jobs with no customer: ${r.unmatched_jobs.slice(0, 30).map(escHtml).join(', ')}${r.unmatched_jobs.length > 30 ? ' …' : ''}</p>` : '');
+}
+
+$('legacy-preview-btn').addEventListener('click', async () => {
+  const panel = $('legacy-import-panel');
+  panel.classList.remove('hidden');
+  panel.innerHTML = '<p class="hint">Checking…</p>';
+  let r;
+  try {
+    r = await api('POST', '/api/admin/legacy-import', authBody({ dry_run: true }));
+  } catch (e) {
+    panel.innerHTML = `<p class="error-msg">${escHtml(e.message)}</p>`;
+    return;
+  }
+  if (!r.entries) { panel.innerHTML = '<p class="hint">Nothing left to bring in.</p>'; return; }
+  panel.innerHTML = `
+    <p><strong>${r.entries} entries (${fmtHours(r.hours)} hrs)</strong> will be copied in. Of those:</p>
+    ${legacySummary(r)}
+    <p class="hint">Tip: import your customer list and order export (Admin → Customers) first, so more entries match a customer.
+      The old data stays where it is, and nothing is copied twice.</p>
+    <div class="legacy-actions">
+      <button class="btn btn-primary btn-sm" id="legacy-go-btn">Bring in ${r.entries} entries</button>
+      <button class="btn btn-secondary btn-sm" id="legacy-cancel-btn">Cancel</button>
+    </div>`;
+  $('legacy-cancel-btn').addEventListener('click', () => panel.classList.add('hidden'));
+  $('legacy-go-btn').addEventListener('click', async () => {
+    $('legacy-go-btn').disabled = true;
+    try {
+      const done = await api('POST', '/api/admin/legacy-import', authBody({ dry_run: false }));
+      panel.innerHTML = `<p class="success-msg">Done — ${done.entries} old entries (${fmtHours(done.hours)} hrs) are now in the new tracker.</p>`;
+      await Promise.all([loadBackupStatus(), loadAdminCustomers(), refreshEverything()]);
+      refreshReviewBadge();
+    } catch (e) {
+      panel.innerHTML = `<p class="error-msg">${escHtml(e.message)}</p>`;
+    }
+  });
 });

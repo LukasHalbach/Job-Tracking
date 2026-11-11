@@ -1129,3 +1129,10 @@ body {
 .ua-assign { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin-top: .6rem; }
 .ua-number { padding: .4rem .6rem; border: 1.5px solid var(--gray-300); border-radius: var(--radius); font: inherit; font-size: .88rem; width: 200px; }
 .ua-number:focus { outline: none; border-color: var(--blue); }
+
+/* Old tracker → new tracker */
+.legacy-actions { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .4rem; }
+.legacy-panel { margin-top: .75rem; padding: .75rem .9rem; border: 1px solid var(--gray-200); border-radius: var(--radius); background: var(--gray-50); font-size: .88rem; }
+.legacy-panel p { margin-bottom: .4rem; }
+.legacy-list { margin: .3rem 0 .6rem 1.2rem; }
+.legacy-list li { margin: .15rem 0; }

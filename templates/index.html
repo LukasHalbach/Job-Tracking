@@ -328,7 +328,11 @@
         <div id="legacy-export" class="hidden">
           <h4 class="cd-sub">Old tracker data</h4>
           <p class="hint-block" style="margin-bottom:.6rem" id="legacy-export-info"></p>
-          <button class="btn btn-outline btn-sm" id="legacy-export-btn">Download old tracker data (Excel)</button>
+          <div class="legacy-actions">
+            <button class="btn btn-primary btn-sm" id="legacy-preview-btn">Bring old entries into the new tracker…</button>
+            <button class="btn btn-outline btn-sm" id="legacy-export-btn">Download old tracker data (Excel)</button>
+          </div>
+          <div id="legacy-import-panel" class="legacy-panel hidden"></div>
         </div>
       </div>
     </div>

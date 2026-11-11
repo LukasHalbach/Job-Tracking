@@ -239,6 +239,13 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_audit_ts       ON audit_log(ts);
         """)
 
+        # Links an entry back to the old tracker row it was copied from, so the
+        # copy can be re-run safely and never duplicates anything.
+        if "legacy_id" not in table_columns(conn, "time_entries"):
+            conn.execute("ALTER TABLE time_entries ADD COLUMN legacy_id INTEGER")
+        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_entries_legacy "
+                     "ON time_entries(legacy_id) WHERE legacy_id IS NOT NULL")
+
         system = {"id": None, "name": "System"}
 
         # Protected internal customer so shop work still has a customer to log against
@@ -1665,9 +1672,18 @@ def admin_backups():
                       "modified": datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M")})
     with get_db() as conn:
         legacy = legacy_entry_count(conn)
+        remaining = unusable = 0
+        if legacy is not None:
+            not_copied = ("FROM legacy_time_entries WHERE id NOT IN "
+                          "(SELECT legacy_id FROM time_entries WHERE legacy_id IS NOT NULL)")
+            remaining = conn.execute(f"SELECT COUNT(*) {not_copied} AND employee_id IN "
+                                     "(SELECT id FROM employees)").fetchone()[0]
+            unusable = conn.execute(f"SELECT COUNT(*) {not_copied} AND employee_id NOT IN "
+                                    "(SELECT id FROM employees)").fetchone()[0]
     return jsonify({"directory": os.path.abspath(BACKUP_DIR), "keep": BACKUP_KEEP,
                     "backups": files, "error": _backup_state["error"],
-                    "legacy_entries": legacy})
+                    "legacy_entries": legacy, "legacy_remaining": remaining,
+                    "legacy_unusable": unusable})
 
 
 @app.route("/api/admin/backup/download", methods=["GET"])
@@ -1834,6 +1850,135 @@ def export_legacy_excel():
                 [[j["job_number"], (j["customer"] if "customer" in job_cols else "") or "",
                   j["description"] or "", "yes" if j["active"] else "no"] for j in jobs])
     return send_workbook(wb, "old_tracker_time_entries.xlsx")
+
+
+UNKNOWN_CUSTOMER = "Unknown customer (old tracker)"
+
+
+def bring_in_legacy_entries(conn, emp, dry_run):
+    """Copy old-tracker entries that haven't been copied yet into time_entries.
+
+    Each entry needs a customer. In order of preference it comes from:
+      1. the job number, if that invoice is now on file (its customer),
+      2. the old job's customer text, matched by name,
+      3. "Shop" -> the Shop / Internal customer,
+      4. the old customer text as a new pending customer (lands in Needs Review),
+      5. otherwise a pending "Unknown customer (old tracker)" bucket.
+    The old job number becomes the entry's invoice (created if needed)."""
+    has_jobs = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' "
+                            "AND name='legacy_jobs'").fetchone()
+    job_cols = table_columns(conn, "legacy_jobs") if has_jobs else []
+    customer_sql = "j.customer" if "customer" in job_cols else "''"
+    title_sql = "j.description" if "description" in job_cols else "''"
+    join = "LEFT JOIN legacy_jobs j ON j.id = te.job_id" if has_jobs else ""
+    rows = conn.execute(f"""
+        SELECT te.*, {customer_sql} AS job_customer, {title_sql} AS job_title
+        FROM legacy_time_entries te {join}
+        WHERE te.id NOT IN (SELECT legacy_id FROM time_entries WHERE legacy_id IS NOT NULL)
+        ORDER BY te.entry_date, te.id
+    """).fetchall()
+
+    employees = {r["id"] for r in conn.execute("SELECT id FROM employees").fetchall()}
+    tasks = {r["name"]: r["id"] for r in conn.execute("SELECT id, name FROM tasks").fetchall()}
+    shop = conn.execute("SELECT * FROM customers WHERE is_system=1").fetchone()
+    stats = defaultdict(int)
+    new_customers, unmatched_jobs = [], set()
+
+    def customer_by_name(name):
+        return conn.execute("SELECT * FROM customers WHERE name=? COLLATE NOCASE", (name,)).fetchone()
+
+    def pending_customer(name, note):
+        cur = conn.execute("INSERT INTO customers (name, status) VALUES (?, 'pending')", (name,))
+        audit(conn, emp, "create", "customer", cur.lastrowid, name, customer_id=cur.lastrowid,
+              snapshot={"name": name, "status": "pending"}, note=note)
+        return conn.execute("SELECT * FROM customers WHERE id=?", (cur.lastrowid,)).fetchone()
+
+    for r in rows:
+        if r["employee_id"] not in employees:
+            stats["skipped_no_employee"] += 1
+            continue
+        number = clean(r["job_number"])
+        old_customer = clean(r["job_customer"])
+        customer = invoice = None
+        if number.lower() == "not listed":
+            number = ""
+        if number.lower() == "shop":
+            customer, number = shop, ""
+            stats["shop"] += 1
+        if not customer and number:
+            invoice = conn.execute("SELECT * FROM invoices WHERE invoice_number=? COLLATE NOCASE",
+                                   (number,)).fetchone()
+            if invoice:
+                customer = conn.execute("SELECT * FROM customers WHERE id=?",
+                                        (invoice["customer_id"],)).fetchone()
+                stats["matched_by_invoice"] += 1
+        if not customer and old_customer:
+            customer = customer_by_name(old_customer)
+            if customer:
+                stats["matched_by_name"] += 1
+            else:
+                customer = pending_customer(
+                    old_customer, "Created from the old tracker's job list — not in the customer list")
+                new_customers.append(old_customer)
+                stats["matched_new_customer"] += 1
+        if not customer:
+            customer = customer_by_name(UNKNOWN_CUSTOMER) or pending_customer(
+                UNKNOWN_CUSTOMER, "Holds old-tracker time whose job had no customer. "
+                                  "Move its invoices to the right customers to sort it out.")
+            stats["unknown_customer"] += 1
+            if number:
+                unmatched_jobs.add(number)
+
+        if number and not invoice:
+            cur = conn.execute(
+                "INSERT INTO invoices (customer_id, invoice_number, title) VALUES (?, ?, ?)",
+                (customer["id"], number, clean(r["job_title"])))
+            invoice = conn.execute("SELECT * FROM invoices WHERE id=?", (cur.lastrowid,)).fetchone()
+            audit(conn, emp, "create", "invoice", invoice["id"], f"{number} ({customer['name']})",
+                  customer_id=customer["id"],
+                  snapshot={"invoice_number": number, "title": invoice["title"],
+                            "customer": customer["name"]},
+                  note="Created from the old tracker's job list")
+            stats["invoices_created"] += 1
+
+        desc, notes = (r["description"] or "").strip(), (r["notes"] or "").strip()
+        combined = notes if not desc or desc == notes else (desc if not notes else f"{desc} — {notes}")
+        cur = conn.execute(
+            """INSERT INTO time_entries
+               (employee_id, entry_date, customer_id, invoice_id, task_id, task_name, category,
+                hours, notes, created_at, updated_at, legacy_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (r["employee_id"], r["entry_date"], customer["id"], invoice["id"] if invoice else None,
+             tasks.get(r["task_name"]), r["task_name"], r["category"], r["hours"], combined,
+             r["created_at"], r["updated_at"] or r["created_at"], r["id"]))
+        view = entry_view(fetch_entry(conn, cur.lastrowid))
+        audit(conn, emp, "create", "entry", cur.lastrowid, entry_label(view),
+              customer_id=customer["id"], snapshot=view,
+              note=f"Brought in from the old tracker (job {r['job_number']})")
+        stats["entries"] += 1
+        stats["hours"] += r["hours"]
+
+    result = {**stats, "hours": round(stats["hours"], 2), "new_customers": sorted(set(new_customers)),
+              "unmatched_jobs": sorted(unmatched_jobs), "dry_run": dry_run}
+    if dry_run:
+        conn.rollback()
+    elif stats["entries"]:
+        audit(conn, emp, "import", "import", None, "Old tracker entries",
+              snapshot={k: v for k, v in result.items() if k != "dry_run"},
+              note="Old-tracker time copied into the new tracker")
+    return result
+
+
+@app.route("/api/admin/legacy-import", methods=["POST"])
+def admin_legacy_import():
+    """Preview (dry_run) or perform the copy of old-tracker entries."""
+    data = body()
+    emp = current_employee(data, admin=True)
+    with get_db() as conn:
+        if legacy_entry_count(conn) is None:
+            raise ApiError("There is no data from the old tracker in this database.", 404)
+        result = bring_in_legacy_entries(conn, emp, dry_run=bool(data.get("dry_run", True)))
+    return jsonify(result)
 
 
 def describe_changes(row):
