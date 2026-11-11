@@ -813,6 +813,13 @@ async function loadBackupStatus() {
         ? `Latest automatic backup: <strong>${escHtml(latest.modified)}</strong> · ${d.backups.length} kept (up to ${d.keep})`
         : 'No automatic backup yet — the first one is made the next time the app is used.') +
       `<br>Saved in <code>${escHtml(d.directory)}</code>`;
+    // Only databases upgraded from the invoice-based version have this.
+    $('legacy-export').classList.toggle('hidden', d.legacy_entries === null);
+    if (d.legacy_entries !== null) {
+      $('legacy-export-info').textContent =
+        `${d.legacy_entries} time entr${d.legacy_entries === 1 ? 'y' : 'ies'} from the old invoice-based tracker ` +
+        'are kept exactly as they were logged. They are not part of the new reports; download them here.';
+    }
   } catch (e) {
     el.textContent = e.message;
   }
@@ -820,4 +827,8 @@ async function loadBackupStatus() {
 
 $('backup-download-btn').addEventListener('click', () => {
   window.location.href = `/api/admin/backup/download?${authQ()}`;
+});
+
+$('legacy-export-btn').addEventListener('click', () => {
+  window.location.href = `/api/export/legacy?${authQ()}`;
 });

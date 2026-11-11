@@ -1663,8 +1663,11 @@ def admin_backups():
         st = os.stat(path)
         files.append({"name": os.path.basename(path), "size": st.st_size,
                       "modified": datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M")})
+    with get_db() as conn:
+        legacy = legacy_entry_count(conn)
     return jsonify({"directory": os.path.abspath(BACKUP_DIR), "keep": BACKUP_KEEP,
-                    "backups": files, "error": _backup_state["error"]})
+                    "backups": files, "error": _backup_state["error"],
+                    "legacy_entries": legacy})
 
 
 @app.route("/api/admin/backup/download", methods=["GET"])
@@ -1729,6 +1732,110 @@ def audit_list():
 
 # ── Export ───────────────────────────────────────────────────────────────────
 
+HEADER_FILL = PatternFill("solid", fgColor="1E5C1E")
+HEADER_FONT = Font(bold=True, color="FFFFFF", size=11)
+CENTER = Alignment(horizontal="center", vertical="center")
+WRAP = Alignment(wrap_text=True, vertical="top")
+THIN = Side(style="thin", color="CCCCCC")
+BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
+ALT_FILL = PatternFill("solid", fgColor="EBF3FB")
+
+
+def write_sheet(ws, headers, widths, data_rows):
+    for col, (header, width) in enumerate(zip(headers, widths), 1):
+        cell = ws.cell(row=1, column=col, value=header)
+        cell.fill, cell.font, cell.alignment, cell.border = HEADER_FILL, HEADER_FONT, CENTER, BORDER
+        ws.column_dimensions[get_column_letter(col)].width = width
+    ws.row_dimensions[1].height = 22
+    for r, values in enumerate(data_rows, 2):
+        for col, val in enumerate(values, 1):
+            cell = ws.cell(row=r, column=col, value=val)
+            cell.border, cell.alignment = BORDER, WRAP
+            if r % 2 == 0:
+                cell.fill = ALT_FILL
+    ws.freeze_panes = "A2"
+    ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}{max(len(data_rows) + 1, 2)}"
+
+
+def send_workbook(wb, filename):
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return send_file(
+        buf,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name=filename,
+    )
+
+
+def legacy_entry_count(conn):
+    """Entries kept from the invoice-based version, or None if there are none."""
+    if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' "
+                        "AND name='legacy_time_entries'").fetchone():
+        return None
+    return conn.execute("SELECT COUNT(*) FROM legacy_time_entries").fetchone()[0]
+
+
+@app.route("/api/export/legacy", methods=["GET"])
+def export_legacy_excel():
+    """Everything logged in the old invoice-based tracker, as it was recorded."""
+    current_employee(request.args, admin=True)
+    with get_db() as conn:
+        if legacy_entry_count(conn) is None:
+            raise ApiError("There is no data from the old tracker in this database.", 404)
+        has_jobs = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' "
+                                "AND name='legacy_jobs'").fetchone()
+        job_cols = table_columns(conn, "legacy_jobs") if has_jobs else []
+        customer = "j.customer" if "customer" in job_cols else "''"
+        title = "j.description" if "description" in job_cols else "''"
+        join = "LEFT JOIN legacy_jobs j ON j.id = te.job_id" if has_jobs else ""
+        rows = conn.execute(f"""
+            SELECT te.entry_date, e.name AS employee_name, te.job_number,
+                   {customer} AS customer, {title} AS job_title,
+                   te.task_name, te.category, te.hours, te.description, te.notes, te.created_at
+            FROM legacy_time_entries te
+            LEFT JOIN employees e ON e.id = te.employee_id {join}
+            ORDER BY te.entry_date, e.name, te.id
+        """).fetchall()
+        jobs = conn.execute("SELECT * FROM legacy_jobs ORDER BY job_number").fetchall() if has_jobs else []
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Time Entries"
+    write_sheet(
+        ws,
+        ["Date", "Employee", "Job / Invoice #", "Customer", "Job Title / Description", "Task",
+         "Category", "Hours", "Description", "Notes", "Logged"],
+        [12, 20, 18, 26, 30, 28, 22, 8, 35, 35, 18],
+        [[r["entry_date"], r["employee_name"] or "(unknown)", r["job_number"], r["customer"] or "",
+          r["job_title"] or "", r["task_name"], r["category"], r["hours"], r["description"],
+          r["notes"], r["created_at"]] for r in rows])
+
+    emp_hours, emp_dates = defaultdict(float), defaultdict(list)
+    job_hours = defaultdict(lambda: [0.0, 0, "", ""])
+    for r in rows:
+        name = r["employee_name"] or "(unknown)"
+        emp_hours[name] += r["hours"]
+        emp_dates[name].append(r["entry_date"])
+        j = job_hours[r["job_number"]]
+        j[0] += r["hours"]
+        j[1] += 1
+        j[2], j[3] = r["customer"] or j[2], r["job_title"] or j[3]
+    write_sheet(wb.create_sheet("Summary by Job"),
+                ["Job / Invoice #", "Customer", "Job Title", "Hours", "Entries"], [18, 28, 34, 10, 9],
+                [[n, v[2], v[3], round(v[0], 2), v[1]] for n, v in sorted(job_hours.items())])
+    write_sheet(wb.create_sheet("Summary by Employee"),
+                ["Employee", "Total Hours", "Date From", "Date To"], [22, 12, 14, 14],
+                [[n, round(h, 2), min(emp_dates[n]), max(emp_dates[n])]
+                 for n, h in sorted(emp_hours.items())])
+    write_sheet(wb.create_sheet("Job List"),
+                ["Job / Invoice #", "Customer", "Job Title / Description", "Active"], [18, 28, 40, 8],
+                [[j["job_number"], (j["customer"] if "customer" in job_cols else "") or "",
+                  j["description"] or "", "yes" if j["active"] else "no"] for j in jobs])
+    return send_workbook(wb, "old_tracker_time_entries.xlsx")
+
+
 def describe_changes(row):
     """One-line plain-text version of an audit row for the spreadsheet."""
     if row["changes"]:
@@ -1776,29 +1883,6 @@ def export_excel():
                 f"SELECT * FROM audit_log WHERE {' AND '.join(lw)} ORDER BY id", lp).fetchall()
 
     wb = openpyxl.Workbook()
-    header_fill = PatternFill("solid", fgColor="1E5C1E")
-    header_font = Font(bold=True, color="FFFFFF", size=11)
-    center = Alignment(horizontal="center", vertical="center")
-    wrap = Alignment(wrap_text=True, vertical="top")
-    thin = Side(style="thin", color="CCCCCC")
-    border = Border(left=thin, right=thin, top=thin, bottom=thin)
-    alt_fill = PatternFill("solid", fgColor="EBF3FB")
-
-    def write_sheet(ws, headers, widths, data_rows):
-        for col, (header, width) in enumerate(zip(headers, widths), 1):
-            cell = ws.cell(row=1, column=col, value=header)
-            cell.fill, cell.font, cell.alignment, cell.border = header_fill, header_font, center, border
-            ws.column_dimensions[get_column_letter(col)].width = width
-        ws.row_dimensions[1].height = 22
-        for r, values in enumerate(data_rows, 2):
-            for col, val in enumerate(values, 1):
-                cell = ws.cell(row=r, column=col, value=val)
-                cell.border, cell.alignment = border, wrap
-                if r % 2 == 0:
-                    cell.fill = alt_fill
-        ws.freeze_panes = "A2"
-        ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}{max(len(data_rows) + 1, 2)}"
-
     ws = wb.active
     ws.title = "Time Entries"
     write_sheet(
@@ -1843,17 +1927,7 @@ def export_excel():
                     [[r["ts"], r["actor_name"], r["action"], r["entity_type"],
                       r["entity_label"], describe_changes(r), r["note"]] for r in log_rows])
 
-    buf = io.BytesIO()
-    wb.save(buf)
-    buf.seek(0)
-    filename = f"time_entries_{date_from or 'all'}_{date_to or 'all'}.xlsx"
-    return send_file(
-        buf,
-        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        as_attachment=True,
-        download_name=filename,
-    )
-
+    return send_workbook(wb, f"time_entries_{date_from or 'all'}_{date_to or 'all'}.xlsx")
 
 if __name__ == "__main__":
     init_db()

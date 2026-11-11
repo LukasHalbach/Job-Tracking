@@ -151,3 +151,5 @@ Job-Tracking/
 ## Upgrading from the invoice-based version
 
 On first start, a database from the old version is backed up to `data/timelog.pre-customer-overhaul.db`, and its old `jobs` and `time_entries` tables are renamed to `legacy_jobs` and `legacy_time_entries` (nothing is dropped). Employees, roles, role task lists and tasks carry over; customers, invoices and entries start fresh. The startup is recorded in the History log.
+
+To get the old tracker's time out, use **Admin → Export Data → Download old tracker data (Excel)**. It contains every old entry as it was logged, with summaries by job and by employee and the old job list. The button only appears on a database that was upgraded from the old version.
