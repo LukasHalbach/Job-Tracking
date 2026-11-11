@@ -152,4 +152,18 @@ Job-Tracking/
 
 On first start, a database from the old version is backed up to `data/timelog.pre-customer-overhaul.db`, and its old `jobs` and `time_entries` tables are renamed to `legacy_jobs` and `legacy_time_entries` (nothing is dropped). Employees, roles, role task lists and tasks carry over; customers, invoices and entries start fresh. The startup is recorded in the History log.
 
-To get the old tracker's time out, use **Admin → Export Data → Download old tracker data (Excel)**. It contains every old entry as it was logged, with summaries by job and by employee and the old job list. The button only appears on a database that was upgraded from the old version.
+### Bringing the old entries into the new tracker
+
+**Admin → Export Data → Bring old entries into the new tracker…** copies the old time entries in, so they show up in everyone's entry list, customer profiles, reports and exports. It shows a preview first and changes nothing until you confirm.
+
+Import your customer list and order export first (Admin → Customers), so more entries find their customer. Each old entry gets its customer from, in order:
+
+1. its job number, if that invoice is now on file;
+2. the old job's customer name, matched to your customer list (case doesn't matter);
+3. "Shop" → Shop / Internal;
+4. a customer name not in your list → added as a pending customer for you to approve or merge in **Needs Review**;
+5. no customer at all → a pending **Unknown customer (old tracker)**. Sort these out by moving their invoices to the right customer (Admin → Customers → Invoices → Edit), which moves the entries with them.
+
+The old job number becomes the entry's invoice. Each copied entry's history notes that it came from the old tracker. The old data itself is left untouched, and running it again never copies anything twice.
+
+To download the old data as it was logged instead, use **Download old tracker data (Excel)** on the same tab. Both options only appear on a database that was upgraded from the old version.
