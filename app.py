@@ -1018,16 +1018,23 @@ def import_customers_csv():
     else:
         raise ApiError("File must be a .csv or .xlsx")
 
-    def find(*options):
-        return next((h for h in names if h.strip().lower() in options), None)
+    def key(header):
+        # "txtCustomerName", "Customer Name" and "customer_name" all become "customername"
+        k = "".join(ch for ch in header.lower() if ch.isalnum())
+        return k[3:] if k.startswith("txt") else k
 
-    customer_col = find("customer", "client", "customer name", "client name",
-                        "company name", "company")
-    number_col = find("invoice", "invoice number", "invoice #", "job number", "job", "number")
-    title_col = find("title", "description", "desc", "name")
+    def find(*options):
+        return next((h for h in names if key(h) in options), None)
+
+    customer_col = find("customer", "client", "customername", "clientname",
+                        "companyname", "company")
+    number_col = find("invoice", "invoicenumber", "invoiceno", "invoicenum", "jobnumber",
+                      "job", "number", "ordernumber", "order", "productlineitem")
+    title_col = find("title", "description", "desc", "name", "ordertext", "ordername",
+                     "jobname", "eventname")
     if not customer_col:
         raise ApiError("Could not find a customer column. Expected a column named "
-                       "Customer, Client, Customer Name, or Company Name.")
+                       "Customer, Customer Name, Company Name, or txtCustomerName.")
 
     sync_mode = request.form.get("deactivate_missing") in ("1", "true", "on")
     stats = defaultdict(int)

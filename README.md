@@ -68,7 +68,7 @@ An invoice number is unique across all customers. If someone types a number that
 
 - **Customers tab** (everyone): browse customers and open a profile showing invoices with hours, hours by task, and recent entries. Employees see their own hours; admins see everyone's, plus hours by employee and the customer's recent changes.
 - **Admin → Customers**: add, rename, deactivate, merge, or delete customers and manage each customer's invoices. A customer or invoice with time entries can't be deleted — merge or deactivate instead.
-- **Import** (Admin → Customers, `.xlsx` or `.csv`): columns `Company Name`/`Customer`, plus optional `Invoice Number` and `Title` (one invoice per row). Re-importing is safe — existing customers are left alone. "Deactivate confirmed invoices not in this file" syncs your open-invoice list; numbers employees typed in are never deactivated by it.
+- **Import** (Admin → Customers, `.xlsx` or `.csv`): columns `Company Name`/`Customer`, plus optional `Invoice Number` and `Title` (one invoice per row). An order export with `txtCustomerName`, `txtProductLineItem` (the invoice number) and `txtOrderText` (the title) is recognised as-is, so customers and invoices load from one file. Re-importing is safe — existing customers and invoices are left alone. "Deactivate confirmed invoices not in this file" syncs your open-invoice list; numbers employees typed in are never deactivated by it.
 - **Shop / Internal** is a protected customer for general shop work.
 
 ## Change tracking
